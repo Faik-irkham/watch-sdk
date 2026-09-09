@@ -178,8 +178,8 @@ class HeartRateStreamHandler(
 
 /**
  * Saturasi oksigen. Pengukuran bersifat sekali jalan: sensor menghitung
- * sekitar 30 detik lalu mengirim hasil akhir dengan status
- * [SPO2_STATUS_COMPLETED].
+ * belasan detik - terukur 13,9 detik pada Galaxy Watch4 - lalu mengirim
+ * hasil akhir dengan status [SPO2_STATUS_COMPLETED].
  */
 class Spo2StreamHandler(
     connection: SamsungHealthConnection,
