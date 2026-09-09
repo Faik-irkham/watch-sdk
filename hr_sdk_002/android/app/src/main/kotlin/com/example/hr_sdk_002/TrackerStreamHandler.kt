@@ -42,7 +42,7 @@ abstract class TrackerStreamHandler(
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
         sink = events
         if (!hasPermission()) {
-            emitError("PERMISSION_DENIED", "Izin BODY_SENSORS belum diberikan")
+            emitError("PERMISSION_DENIED", "Izin sensor untuk $label belum diberikan")
             return
         }
         connection.acquire(this)

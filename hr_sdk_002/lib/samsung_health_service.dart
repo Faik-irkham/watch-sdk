@@ -1,5 +1,16 @@
 import 'package:flutter/services.dart';
 
+/// Sensor yang bisa diminta izinnya.
+///
+/// Sejak Wear OS 6 (Android 16) izin sensor tubuh pindah ke Health Connect dan
+/// tiap sensor punya izin sendiri, jadi permintaan izin dibedakan per sensor.
+enum HealthSensor {
+  heartRate,
+  spo2;
+
+  Map<String, String> get _args => {'sensor': name};
+}
+
 /// Kabar dari sisi Android yang bukan hasil pengukuran (koneksi, selesai, dsb).
 class TrackerStatus {
   const TrackerStatus(this.state, this.message);
@@ -135,11 +146,11 @@ class SamsungHealthService {
   static const EventChannel _heartRate = EventChannel('samsung_health/heart_rate');
   static const EventChannel _spo2 = EventChannel('samsung_health/spo2');
 
-  Future<bool> hasPermission() async =>
-      await _methods.invokeMethod<bool>('hasPermission') ?? false;
+  Future<bool> hasPermission(HealthSensor sensor) async =>
+      await _methods.invokeMethod<bool>('hasPermission', sensor._args) ?? false;
 
-  Future<bool> requestPermission() async =>
-      await _methods.invokeMethod<bool>('requestPermission') ?? false;
+  Future<bool> requestPermission(HealthSensor sensor) async =>
+      await _methods.invokeMethod<bool>('requestPermission', sensor._args) ?? false;
 
   /// Daftar tracker yang didukung jam ini. Kosong sebelum ada koneksi aktif.
   Future<List<String>> supportedTrackers() async =>

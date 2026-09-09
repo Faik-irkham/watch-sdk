@@ -1,6 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Wajib untuk Samsung Health Sensor SDK: akses sensor detak jantung. -->
+    <!-- Akses sensor untuk Samsung Health Sensor SDK.
+         Di Wear OS 6 (Android 16 / API 36) izin sensor tubuh pindah ke Health
+         Connect, jadi READ_HEART_RATE dan READ_OXYGEN_SATURATION ikut
+         dideklarasikan; BODY_SENSORS tetap dipakai di versi sebelumnya. -->
     <uses-permission android:name="android.permission.BODY_SENSORS" />
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+    <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION" />
 
     <!-- Aplikasi ini berjalan di jam (Wear OS), bukan di HP. -->
     <uses-feature android:name="android.hardware.type.watch" />

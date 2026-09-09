@@ -107,7 +107,7 @@ class _HeartRateViewState extends State<HeartRateView> {
   }
 
   Future<void> _start() async {
-    if (!await _service.requestPermission()) {
+    if (!await _service.requestPermission(HealthSensor.heartRate)) {
       if (mounted) setState(() => _message = 'Izin sensor ditolak');
       return;
     }
@@ -188,7 +188,7 @@ class _Spo2ViewState extends State<Spo2View> {
   }
 
   Future<void> _start() async {
-    if (!await _service.requestPermission()) {
+    if (!await _service.requestPermission(HealthSensor.spo2)) {
       if (mounted) setState(() => _message = 'Izin sensor ditolak');
       return;
     }

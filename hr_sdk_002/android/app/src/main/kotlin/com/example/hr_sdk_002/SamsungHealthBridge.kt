@@ -3,11 +3,23 @@ package com.example.hr_sdk_002
 import android.Manifest
 import android.app.Activity
 import android.content.pm.PackageManager
+import android.os.Build
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
+
+/** Sensor yang bisa diminta dari sisi Dart. */
+enum class HealthSensor(val key: String) {
+    HEART_RATE("heartRate"),
+    SPO2("spo2");
+
+    companion object {
+        fun fromKey(key: String?): HealthSensor =
+            entries.firstOrNull { it.key == key } ?: HEART_RATE
+    }
+}
 
 /**
  * Menjembatani Samsung Health Sensor SDK ke Flutter.
@@ -26,8 +38,12 @@ class SamsungHealthBridge(
     private val heartRateChannel = EventChannel(messenger, HEART_RATE_CHANNEL)
     private val spo2Channel = EventChannel(messenger, SPO2_CHANNEL)
 
-    private val heartRateHandler = HeartRateStreamHandler(connection, ::hasBodySensorsPermission)
-    private val spo2Handler = Spo2StreamHandler(connection, ::hasBodySensorsPermission)
+    private val heartRateHandler = HeartRateStreamHandler(connection) {
+        hasPermission(HealthSensor.HEART_RATE)
+    }
+    private val spo2Handler = Spo2StreamHandler(connection) {
+        hasPermission(HealthSensor.SPO2)
+    }
 
     private var pendingPermissionResult: MethodChannel.Result? = null
 
@@ -35,9 +51,10 @@ class SamsungHealthBridge(
         heartRateChannel.setStreamHandler(heartRateHandler)
         spo2Channel.setStreamHandler(spo2Handler)
         methodChannel.setMethodCallHandler { call, result ->
+            val sensor = HealthSensor.fromKey(call.argument<String>("sensor"))
             when (call.method) {
-                "hasPermission" -> result.success(hasBodySensorsPermission())
-                "requestPermission" -> requestBodySensorsPermission(result)
+                "hasPermission" -> result.success(hasPermission(sensor))
+                "requestPermission" -> requestPermission(sensor, result)
                 "supportedTrackers" -> result.success(connection.supportedTrackerNames())
                 else -> result.notImplemented()
             }
@@ -51,12 +68,23 @@ class SamsungHealthBridge(
         connection.disconnect()
     }
 
-    private fun hasBodySensorsPermission(): Boolean =
-        ContextCompat.checkSelfPermission(activity, Manifest.permission.BODY_SENSORS) ==
+    /**
+     * Android 16 (API 36) memindahkan izin sensor tubuh ke Health Connect, dan
+     * tiap sensor punya izinnya sendiri. Di bawah itu satu BODY_SENSORS
+     * mencakup semuanya.
+     */
+    private fun permissionFor(sensor: HealthSensor): String = when {
+        Build.VERSION.SDK_INT < 36 -> Manifest.permission.BODY_SENSORS
+        sensor == HealthSensor.SPO2 -> PERMISSION_READ_OXYGEN_SATURATION
+        else -> PERMISSION_READ_HEART_RATE
+    }
+
+    private fun hasPermission(sensor: HealthSensor): Boolean =
+        ContextCompat.checkSelfPermission(activity, permissionFor(sensor)) ==
             PackageManager.PERMISSION_GRANTED
 
-    private fun requestBodySensorsPermission(result: MethodChannel.Result) {
-        if (hasBodySensorsPermission()) {
+    private fun requestPermission(sensor: HealthSensor, result: MethodChannel.Result) {
+        if (hasPermission(sensor)) {
             result.success(true)
             return
         }
@@ -67,7 +95,7 @@ class SamsungHealthBridge(
         pendingPermissionResult = result
         ActivityCompat.requestPermissions(
             activity,
-            arrayOf(Manifest.permission.BODY_SENSORS),
+            arrayOf(permissionFor(sensor)),
             PERMISSION_REQUEST_CODE,
         )
     }
@@ -87,5 +115,8 @@ class SamsungHealthBridge(
         const val HEART_RATE_CHANNEL = "samsung_health/heart_rate"
         const val SPO2_CHANNEL = "samsung_health/spo2"
         const val PERMISSION_REQUEST_CODE = 4711
+        const val PERMISSION_READ_HEART_RATE = "android.permission.health.READ_HEART_RATE"
+        const val PERMISSION_READ_OXYGEN_SATURATION =
+            "android.permission.health.READ_OXYGEN_SATURATION"
     }
 }
