@@ -3,6 +3,7 @@ package com.example.hr_sdk_001
 import android.Manifest
 import android.app.Activity
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -60,8 +61,17 @@ class HeartRateBridge(
 
     // ---------------------------------------------------------------- izin
 
+    /**
+     * Android 16 (API 36) menghapus BODY_SENSORS sebagai izin runtime; sejak itu
+     * akses detak jantung diminta lewat izin Health Connect READ_HEART_RATE.
+     * Meminta BODY_SENSORS di sana langsung ditolak tanpa dialog.
+     */
+    private val sensorPermission: String =
+        if (Build.VERSION.SDK_INT >= 36) PERMISSION_READ_HEART_RATE
+        else Manifest.permission.BODY_SENSORS
+
     private fun hasBodySensorsPermission(): Boolean =
-        ContextCompat.checkSelfPermission(activity, Manifest.permission.BODY_SENSORS) ==
+        ContextCompat.checkSelfPermission(activity, sensorPermission) ==
             PackageManager.PERMISSION_GRANTED
 
     private fun requestBodySensorsPermission(result: MethodChannel.Result) {
@@ -76,7 +86,7 @@ class HeartRateBridge(
         pendingPermissionResult = result
         ActivityCompat.requestPermissions(
             activity,
-            arrayOf(Manifest.permission.BODY_SENSORS),
+            arrayOf(sensorPermission),
             PERMISSION_REQUEST_CODE,
         )
     }
@@ -96,7 +106,7 @@ class HeartRateBridge(
     override fun onListen(arguments: Any?, sink: EventChannel.EventSink?) {
         eventSink = sink
         if (!hasBodySensorsPermission()) {
-            emitError("PERMISSION_DENIED", "Izin BODY_SENSORS belum diberikan")
+            emitError("PERMISSION_DENIED", "Izin sensor ($sensorPermission) belum diberikan")
             return
         }
         startTracking()
@@ -243,6 +253,8 @@ class HeartRateBridge(
 
     companion object {
         private const val TAG = "HeartRateBridge"
+        private const val PERMISSION_READ_HEART_RATE =
+            "android.permission.health.READ_HEART_RATE"
         private const val METHOD_CHANNEL = "samsung_hr/method"
         private const val EVENT_CHANNEL = "samsung_hr/heart_rate"
         private const val PERMISSION_REQUEST_CODE = 4711

@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.example.hr_sdk_001"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -22,7 +22,7 @@ android {
         // Samsung Health Sensor SDK butuh Wear OS 3+ (Galaxy Watch4 ke atas).
         // AAR-nya sendiri minSdkVersion 26, tapi tracker-nya hanya jalan di Wear OS 3+.
         minSdk = 30
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = 34
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
         // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
         // You can force using the value of versionCode by specifying the `-P force-version-code-ignoring-abi=true`

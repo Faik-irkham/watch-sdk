@@ -1,6 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Wajib untuk Samsung Health Sensor SDK: akses sensor detak jantung. -->
-    <uses-permission android:name="android.permission.BODY_SENSORS" />
+    <!-- Akses sensor detak jantung untuk Samsung Health Sensor SDK.
+         BODY_SENSORS tidak lagi bisa diberikan untuk aplikasi yang menyasar
+         Android 16 (API 36) ke atas; sejak itu izinnya pindah ke Health Connect
+         sebagai READ_HEART_RATE. Keduanya dideklarasikan supaya satu APK jalan
+         di Wear OS 5 ke bawah maupun Wear OS 6. -->
+    <uses-permission
+        android:name="android.permission.BODY_SENSORS"/>
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
 
     <!-- Aplikasi ini berjalan di jam (Wear OS), bukan di HP. -->
     <uses-feature android:name="android.hardware.type.watch" />
