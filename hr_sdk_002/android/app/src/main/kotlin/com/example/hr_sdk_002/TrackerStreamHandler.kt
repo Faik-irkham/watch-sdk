@@ -91,6 +91,9 @@ abstract class TrackerStreamHandler(
         override fun onDataReceived(dataPoints: List<DataPoint>) {
             for (point in dataPoints) {
                 val payload = toPayload(point)
+                // Nilai mentah dicatat supaya kode status yang belum terpetakan
+                // bisa dicocokkan dengan apa yang benar-benar terjadi di jam.
+                Log.i(TAG, "[$label] $payload")
                 emit(payload + ("event" to "data"))
                 if (isFinal(payload)) {
                     mainHandler.post {
