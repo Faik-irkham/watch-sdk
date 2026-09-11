@@ -55,8 +55,9 @@ class _AccelerometerViewState extends State<AccelerometerView>
             _message = event.message;
           }
         });
-        if (event is AccelerometerBatch)
+        if (event is AccelerometerBatch) {
           persist(store.saveAccelerometer(event));
+        }
       },
       onError: (Object error) {
         if (!mounted) return;
