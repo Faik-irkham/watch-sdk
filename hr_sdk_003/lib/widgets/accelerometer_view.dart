@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:hr_sdk_003/measurement_shared.dart';
 import 'package:hr_sdk_003/samsung_health_service.dart';
+import 'package:hr_sdk_003/widgets/history_page.dart';
 
 class AccelerometerView extends StatefulWidget {
   const AccelerometerView({super.key});
@@ -67,6 +68,22 @@ class _AccelerometerViewState extends State<AccelerometerView>
     );
   }
 
+  void _openHistory() {
+    String axis(double v) => v.round().toString();
+    HistoryPage.open(
+      context,
+      title: 'Riwayat akselerometer',
+      totalNoun: 'sampel',
+      load: () async => (await store.accelerometerHistory()).map(
+        (s) => HistoryEntry(
+          at: s.second,
+          value: 'x ${axis(s.meanX)} · y ${axis(s.meanY)} · z ${axis(s.meanZ)}',
+          detail: 'rata-rata ${s.samples} sampel, nilai mentah',
+        ),
+      ),
+    );
+  }
+
   Future<void> _stop() async {
     await _subscription?.cancel();
     _subscription = null;
@@ -119,9 +136,10 @@ class _AccelerometerViewState extends State<AccelerometerView>
               ),
               if (footnote != null) Footnote(footnote),
               const SizedBox(height: 8),
-              FilledButton(
+              MeasurementActions(
+                buttonLabel: _measuring ? 'Berhenti' : 'Mulai',
                 onPressed: _measuring ? _stop : _start,
-                child: Text(_measuring ? 'Berhenti' : 'Mulai'),
+                onHistory: _openHistory,
               ),
             ],
           ),

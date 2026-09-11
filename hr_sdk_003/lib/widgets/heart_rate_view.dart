@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:hr_sdk_003/measurement_shared.dart';
 import 'package:hr_sdk_003/samsung_health_service.dart';
+import 'package:hr_sdk_003/widgets/history_page.dart';
 
 class HeartRateView extends StatefulWidget {
   const HeartRateView({super.key});
@@ -63,6 +64,15 @@ class _HeartRateViewState extends State<HeartRateView>
     );
   }
 
+  void _openHistory() {
+    HistoryPage.open(
+      context,
+      title: 'Riwayat detak jantung',
+      load: () async => (await store.heartRateHistory())
+          .map((r) => HistoryEntry(at: r.measuredAt, value: '${r.bpm} bpm')),
+    );
+  }
+
   Future<void> _stop() async {
     await _subscription?.cancel();
     _subscription = null;
@@ -85,6 +95,7 @@ class _HeartRateViewState extends State<HeartRateView>
       footnote: savedLabel,
       buttonLabel: _measuring ? 'Berhenti' : 'Mulai',
       onPressed: _measuring ? _stop : _start,
+      onHistory: _openHistory,
     );
   }
 }

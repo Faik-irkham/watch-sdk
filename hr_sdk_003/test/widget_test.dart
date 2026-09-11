@@ -13,6 +13,16 @@ void main() {
     expect(find.widgetWithText(FilledButton, 'Mulai'), findsOneWidget);
   });
 
+  testWidgets('setiap halaman sensor punya tombol riwayat', (tester) async {
+    await tester.pumpWidget(const SamsungHealthApp());
+
+    for (var page = 0; page < 3; page++) {
+      expect(find.byTooltip('Riwayat'), findsOneWidget, reason: 'halaman ke-$page');
+      await tester.fling(find.byType(PageView), const Offset(-400, 0), 1000);
+      await tester.pumpAndSettle();
+    }
+  });
+
   testWidgets('swiping reveals the SpO2 page', (tester) async {
     await tester.pumpWidget(const SamsungHealthApp());
 

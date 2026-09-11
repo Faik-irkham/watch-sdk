@@ -48,6 +48,7 @@ class MeasurementLayout extends StatelessWidget {
     required this.buttonLabel,
     required this.onPressed,
     this.footnote,
+    this.onHistory,
   });
 
   final IconData icon;
@@ -58,6 +59,7 @@ class MeasurementLayout extends StatelessWidget {
   final String buttonLabel;
   final VoidCallback onPressed;
   final String? footnote;
+  final VoidCallback? onHistory;
 
   @override
   Widget build(BuildContext context) {
@@ -93,10 +95,48 @@ class MeasurementLayout extends StatelessWidget {
             ),
             if (footnote != null) Footnote(footnote!),
             const SizedBox(height: 10),
-            FilledButton(onPressed: onPressed, child: Text(buttonLabel)),
+            MeasurementActions(
+              buttonLabel: buttonLabel,
+              onPressed: onPressed,
+              onHistory: onHistory,
+            ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Tombol utama pengukuran, diikuti tombol riwayat bila tersedia.
+class MeasurementActions extends StatelessWidget {
+  const MeasurementActions({
+    super.key,
+    required this.buttonLabel,
+    required this.onPressed,
+    this.onHistory,
+  });
+
+  final String buttonLabel;
+  final VoidCallback onPressed;
+  final VoidCallback? onHistory;
+
+  @override
+  Widget build(BuildContext context) {
+    final history = onHistory;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        FilledButton(onPressed: onPressed, child: Text(buttonLabel)),
+        if (history != null) ...[
+          const SizedBox(width: 6),
+          IconButton.filledTonal(
+            onPressed: history,
+            tooltip: 'Riwayat',
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.history, size: 20),
+          ),
+        ],
+      ],
     );
   }
 }

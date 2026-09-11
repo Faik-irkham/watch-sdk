@@ -83,4 +83,66 @@ void main() {
     expect(saved.last['y'], -24);
     expect(saved.last['measured_at'], 960);
   });
+
+  group('riwayat', () {
+    test('detak jantung: terbaru di atas, dibatasi, total tetap utuh', () async {
+      for (var i = 1; i <= 5; i++) {
+        await store.saveHeartRate(heartRate(status: 1, bpm: 70 + i, at: i * 1000));
+      }
+
+      final history = await store.heartRateHistory(limit: 3);
+
+      expect(history.total, 5);
+      expect(history.items.map((r) => r.bpm), [75, 74, 73]);
+      expect(history.items.first.measuredAt, DateTime.fromMillisecondsSinceEpoch(5000));
+    });
+
+    test('SpO2: hanya hasil selesai yang muncul', () async {
+      await store.saveSpo2(spo2(status: 0, value: 0, at: 1000));
+      await store.saveSpo2(spo2(status: 2, value: 97, at: 2000));
+      await store.saveSpo2(spo2(status: 2, value: 98, at: 3000));
+
+      final history = await store.spo2History();
+
+      expect(history.total, 2);
+      expect(history.items.map((r) => r.spo2Percent), [98, 97]);
+      expect(history.items.first.bpm, 83);
+    });
+
+    test('akselerometer diringkas per detik', () async {
+      AccelerometerSample at(int ms, int x) => AccelerometerSample(
+            x: x,
+            y: 0,
+            z: -x,
+            timestamp: DateTime.fromMillisecondsSinceEpoch(ms),
+          );
+      // Detik ke-1 berisi dua sampel, detik ke-2 berisi tiga sampel.
+      await store.saveAccelerometer(AccelerometerBatch([
+        at(1000, 10),
+        at(1500, 20),
+        at(2000, 30),
+        at(2400, 60),
+        at(2800, 90),
+      ]));
+
+      final history = await store.accelerometerHistory();
+
+      expect(history.total, 5);
+      expect(history.items, hasLength(2));
+      final latest = history.items.first;
+      expect(latest.second, DateTime.fromMillisecondsSinceEpoch(2000));
+      expect(latest.samples, 3);
+      expect(latest.meanX, 60);
+      expect(latest.meanZ, -60);
+      expect(history.items.last.samples, 2);
+      expect(history.items.last.meanX, 15);
+    });
+
+    test('tabel kosong menghasilkan riwayat kosong', () async {
+      final history = await store.heartRateHistory();
+      expect(history.items, isEmpty);
+      expect(history.total, 0);
+    });
+  });
 }
+

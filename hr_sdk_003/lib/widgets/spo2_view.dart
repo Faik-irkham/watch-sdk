@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:hr_sdk_003/measurement_shared.dart';
 import 'package:hr_sdk_003/samsung_health_service.dart';
+import 'package:hr_sdk_003/widgets/history_page.dart';
 
 class Spo2View extends StatefulWidget {
   const Spo2View({super.key});
@@ -69,6 +70,20 @@ class _Spo2ViewState extends State<Spo2View>
     );
   }
 
+  void _openHistory() {
+    HistoryPage.open(
+      context,
+      title: 'Riwayat SpO₂',
+      load: () async => (await store.spo2History()).map(
+        (r) => HistoryEntry(
+          at: r.measuredAt,
+          value: '${r.spo2Percent}%',
+          detail: '${r.bpm} bpm',
+        ),
+      ),
+    );
+  }
+
   Future<void> _stop({bool keepMessage = false}) async {
     await _subscription?.cancel();
     _subscription = null;
@@ -91,6 +106,7 @@ class _Spo2ViewState extends State<Spo2View>
       footnote: savedLabel,
       buttonLabel: _measuring ? 'Berhenti' : 'Mulai',
       onPressed: _measuring ? _stop : _start,
+      onHistory: _openHistory,
     );
   }
 }

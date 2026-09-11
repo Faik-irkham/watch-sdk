@@ -130,9 +130,143 @@ class MeasurementStore {
     return batch.samples.length;
   }
 
+  /// Batas baris yang ditampilkan di halaman riwayat. Layar jam tidak butuh
+  /// lebih, dan membatasi query menjaga halaman tetap cepat dibuka.
+  static const int historyLimit = 100;
+
+  Future<History<HeartRateRecord>> heartRateHistory({int limit = historyLimit}) async {
+    final db = await database;
+    final rows = await db.query(
+      'heart_rate',
+      columns: ['measured_at', 'bpm'],
+      orderBy: 'measured_at DESC',
+      limit: limit,
+    );
+    return History(
+      [
+        for (final r in rows)
+          HeartRateRecord(measuredAt: _time(r['measured_at']), bpm: _int(r['bpm'])),
+      ],
+      await _count(db, 'heart_rate'),
+    );
+  }
+
+  Future<History<Spo2Record>> spo2History({int limit = historyLimit}) async {
+    final db = await database;
+    final rows = await db.query(
+      'spo2',
+      columns: ['measured_at', 'spo2_percent', 'bpm'],
+      orderBy: 'measured_at DESC',
+      limit: limit,
+    );
+    return History(
+      [
+        for (final r in rows)
+          Spo2Record(
+            measuredAt: _time(r['measured_at']),
+            spo2Percent: _int(r['spo2_percent']),
+            bpm: _int(r['bpm']),
+          ),
+      ],
+      await _count(db, 'spo2'),
+    );
+  }
+
+  /// Riwayat akselerometer diringkas per detik: tabel mentahnya berisi sekitar
+  /// 25 sampel per detik, terlalu rapat untuk dibaca satu per satu di jam.
+  /// [History.total] tetap menghitung sampel mentah.
+  Future<History<AccelerometerSecond>> accelerometerHistory({
+    int limit = historyLimit,
+  }) async {
+    final db = await database;
+    final rows = await db.rawQuery('''
+      SELECT measured_at / 1000 AS second,
+             COUNT(*) AS samples,
+             AVG(x)   AS mean_x,
+             AVG(y)   AS mean_y,
+             AVG(z)   AS mean_z
+      FROM accelerometer
+      GROUP BY second
+      ORDER BY second DESC
+      LIMIT ?''', [limit]);
+    return History(
+      [
+        for (final r in rows)
+          AccelerometerSecond(
+            second: _time(_int(r['second']) * 1000),
+            samples: _int(r['samples']),
+            meanX: (r['mean_x'] as num).toDouble(),
+            meanY: (r['mean_y'] as num).toDouble(),
+            meanZ: (r['mean_z'] as num).toDouble(),
+          ),
+      ],
+      await _count(db, 'accelerometer'),
+    );
+  }
+
+  static Future<int> _count(Database db, String table) async =>
+      Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM $table')) ?? 0;
+
   Future<void> close() async {
     final db = _db;
     _db = null;
     if (db != null) await (await db).close();
   }
 }
+
+/// Potongan riwayat terbaru dari satu tabel.
+class History<T> {
+  const History(this.items, this.total);
+
+  /// Baris terbaru, paling baru di depan, sebanyak-banyaknya
+  /// [MeasurementStore.historyLimit].
+  final List<T> items;
+
+  /// Jumlah seluruh baris di tabel, bukan hanya yang dimuat di [items].
+  final int total;
+
+  History<R> map<R>(R Function(T item) convert) =>
+      History(items.map(convert).toList(growable: false), total);
+}
+
+class HeartRateRecord {
+  const HeartRateRecord({required this.measuredAt, required this.bpm});
+
+  final DateTime measuredAt;
+  final int bpm;
+}
+
+class Spo2Record {
+  const Spo2Record({
+    required this.measuredAt,
+    required this.spo2Percent,
+    required this.bpm,
+  });
+
+  final DateTime measuredAt;
+  final int spo2Percent;
+  final int bpm;
+}
+
+/// Ringkasan sampel akselerometer dalam satu detik, dalam satuan mentah sensor.
+class AccelerometerSecond {
+  const AccelerometerSecond({
+    required this.second,
+    required this.samples,
+    required this.meanX,
+    required this.meanY,
+    required this.meanZ,
+  });
+
+  final DateTime second;
+  final int samples;
+  final double meanX;
+  final double meanY;
+  final double meanZ;
+}
+
+int _int(Object? value) => (value as num).toInt();
+
+DateTime _time(Object? millis) =>
+    DateTime.fromMillisecondsSinceEpoch((millis as num).toInt());
+
