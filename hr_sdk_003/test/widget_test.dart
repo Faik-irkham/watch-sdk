@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:hr_sdk_003/main.dart';
@@ -34,5 +35,89 @@ void main() {
     expect(find.text('Y'), findsOneWidget);
     expect(find.text('Z'), findsOneWidget);
     expect(find.text('Nilai mentah sensor, belum m/s²'), findsOneWidget);
+  });
+
+  group('navigasi tanpa swipe-to-dismiss sistem', () {
+    late List<String> platformCalls;
+
+    setUp(() => platformCalls = []);
+
+    Future<void> watchPlatform(WidgetTester tester) async {
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          platformCalls.add(call.method);
+          return null;
+        },
+      );
+      addTearDown(() => tester.binding.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null));
+    }
+
+    Future<void> swipeLeft(WidgetTester tester) async {
+      await tester.fling(find.byType(PageView), const Offset(-400, 0), 1000);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('geser kanan dari akselerometer kembali ke SpO2, tidak keluar',
+        (tester) async {
+      await watchPlatform(tester);
+      await tester.pumpWidget(const SamsungHealthApp());
+      await swipeLeft(tester);
+      await swipeLeft(tester);
+      expect(find.text('X'), findsOneWidget);
+
+      await tester.fling(find.byType(PageView), const Offset(400, 0), 1000);
+      await tester.pumpAndSettle();
+
+      expect(find.text('% SpO₂'), findsOneWidget);
+      expect(platformCalls, isNot(contains('SystemNavigator.pop')));
+    });
+
+    testWidgets('tombol kembali di akselerometer mundur ke SpO2, tidak keluar',
+        (tester) async {
+      await watchPlatform(tester);
+      await tester.pumpWidget(const SamsungHealthApp());
+      await swipeLeft(tester);
+      await swipeLeft(tester);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      expect(find.text('% SpO₂'), findsOneWidget);
+      expect(platformCalls, isNot(contains('SystemNavigator.pop')));
+    });
+
+    testWidgets('tombol kembali di halaman pertama menutup aplikasi', (tester) async {
+      await watchPlatform(tester);
+      await tester.pumpWidget(const SamsungHealthApp());
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      expect(platformCalls, contains('SystemNavigator.pop'));
+    });
+
+    testWidgets('geser kanan di halaman pertama menutup aplikasi', (tester) async {
+      await watchPlatform(tester);
+      await tester.pumpWidget(const SamsungHealthApp());
+
+      await tester.drag(find.byType(PageView), const Offset(400, 0));
+      await tester.pumpAndSettle();
+
+      expect(platformCalls, contains('SystemNavigator.pop'));
+    });
+
+    testWidgets('geseran kecil di halaman pertama tidak menutup aplikasi',
+        (tester) async {
+      await watchPlatform(tester);
+      await tester.pumpWidget(const SamsungHealthApp());
+
+      await tester.drag(find.byType(PageView), const Offset(80, 0));
+      await tester.pumpAndSettle();
+
+      expect(platformCalls, isNot(contains('SystemNavigator.pop')));
+      expect(find.text('bpm'), findsOneWidget);
+    });
   });
 }
