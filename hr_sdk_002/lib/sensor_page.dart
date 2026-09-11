@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:hr_sdk_002/measurement_store.dart';
 import 'package:hr_sdk_002/samsung_health_service.dart';
 
 class SensorPages extends StatefulWidget {
@@ -64,7 +65,8 @@ class HeartRateView extends StatefulWidget {
   State<HeartRateView> createState() => _HeartRateViewState();
 }
 
-class _HeartRateViewState extends State<HeartRateView> {
+class _HeartRateViewState extends State<HeartRateView>
+    with _PersistsMeasurements<HeartRateView> {
   final SamsungHealthService _service = SamsungHealthService();
 
   StreamSubscription<Object>? _subscription;
@@ -89,6 +91,7 @@ class _HeartRateViewState extends State<HeartRateView> {
       _measuring = true;
       _sample = null;
       _message = 'Menyambung ke sensor…';
+      resetSaved();
     });
 
     _subscription = _service.heartRateStream().listen(
@@ -102,6 +105,8 @@ class _HeartRateViewState extends State<HeartRateView> {
             _message = event.message;
           }
         });
+        // Hanya status 1 yang tersimpan; penyaringannya ada di MeasurementStore.
+        if (event is HeartRateSample) persist(store.saveHeartRate(event));
       },
       onError: (Object error) {
         if (!mounted) return;
@@ -132,6 +137,7 @@ class _HeartRateViewState extends State<HeartRateView> {
       value: (sample != null && sample.isValid) ? '${sample.heartRate}' : '--',
       unit: 'bpm',
       message: _message,
+      footnote: savedLabel,
       buttonLabel: _measuring ? 'Berhenti' : 'Mulai',
       onPressed: _measuring ? _stop : _start,
     );
@@ -145,13 +151,15 @@ class Spo2View extends StatefulWidget {
   State<Spo2View> createState() => _Spo2ViewState();
 }
 
-class _Spo2ViewState extends State<Spo2View> {
+class _Spo2ViewState extends State<Spo2View>
+    with _PersistsMeasurements<Spo2View> {
   final SamsungHealthService _service = SamsungHealthService();
 
   StreamSubscription<Object>? _subscription;
   Spo2Sample? _sample;
   String _message = 'Tekan mulai, lalu diam ±30 detik';
   bool _measuring = false;
+  bool _resultSaved = false;
 
   @override
   void dispose() {
@@ -170,6 +178,8 @@ class _Spo2ViewState extends State<Spo2View> {
       _measuring = true;
       _sample = null;
       _message = 'Menyambung ke sensor…';
+      _resultSaved = false;
+      resetSaved();
     });
 
     _subscription = _service.spo2Stream().listen(
@@ -180,6 +190,12 @@ class _Spo2ViewState extends State<Spo2View> {
             _sample = event;
             _message = event.statusMessage;
           });
+          // Pustaka dapat mengirim hasil akhir dua kali dengan cap waktu
+          // berbeda beberapa milidetik; satu pengukuran cukup satu baris.
+          if (event.isComplete && !_resultSaved) {
+            _resultSaved = true;
+            persist(store.saveSpo2(event));
+          }
         } else if (event is TrackerStatus) {
           setState(() => _message = event.message);
           // Pengukuran SpO2 sekali jalan: sensor sudah dimatikan di sisi
@@ -216,6 +232,7 @@ class _Spo2ViewState extends State<Spo2View> {
       value: (sample != null && sample.isComplete) ? '${sample.spo2}' : '--',
       unit: '% SpO₂',
       message: _message,
+      footnote: savedLabel,
       buttonLabel: _measuring ? 'Berhenti' : 'Mulai',
       onPressed: _measuring ? _stop : _start,
     );
@@ -233,6 +250,7 @@ class MeasurementLayout extends StatelessWidget {
     required this.message,
     required this.buttonLabel,
     required this.onPressed,
+    this.footnote,
   });
 
   final IconData icon;
@@ -242,6 +260,9 @@ class MeasurementLayout extends StatelessWidget {
   final String message;
   final String buttonLabel;
   final VoidCallback onPressed;
+
+  /// Keterangan kecil di bawah pesan, misalnya jumlah data yang tersimpan.
+  final String? footnote;
 
   @override
   Widget build(BuildContext context) {
@@ -275,11 +296,57 @@ class MeasurementLayout extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 11, color: Colors.white60),
             ),
+            if (footnote != null) _Footnote(footnote!),
             const SizedBox(height: 10),
             FilledButton(onPressed: onPressed, child: Text(buttonLabel)),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _Footnote extends StatelessWidget {
+  const _Footnote(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Text(text, style: const TextStyle(fontSize: 10, color: Colors.white38)),
+    );
+  }
+}
+
+/// Menulis ke SQLite tanpa menahan aliran data, lalu menghitung baris yang
+/// benar-benar tersimpan agar pengguna tahu penyimpanan berjalan.
+mixin _PersistsMeasurements<T extends StatefulWidget> on State<T> {
+  final MeasurementStore store = MeasurementStore.instance;
+
+  int _saved = 0;
+  bool _saveFailed = false;
+
+  String? get savedLabel {
+    if (_saveFailed) return 'Gagal menyimpan ke SQLite';
+    return _saved == 0 ? null : '$_saved tersimpan';
+  }
+
+  void resetSaved() {
+    _saved = 0;
+    _saveFailed = false;
+  }
+
+  void persist(Future<int> write) {
+    write.then(
+      (count) {
+        if (count > 0 && mounted) setState(() => _saved += count);
+      },
+      onError: (Object error) {
+        debugPrint('Gagal menyimpan ke SQLite: $error');
+        if (mounted) setState(() => _saveFailed = true);
+      },
     );
   }
 }
