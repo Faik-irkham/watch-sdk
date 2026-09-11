@@ -6,6 +6,10 @@
     <uses-permission android:name="android.permission.BODY_SENSORS" />
     <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
     <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION" />
+    <!-- Akselerometer tidak memakai izin sensor tubuh: menurut tabel izin resmi
+         Samsung, ACCELEROMETER_CONTINUOUS menuntut ACTIVITY_RECOGNITION di semua
+         versi Android. -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
 
     <!-- Aplikasi ini berjalan di jam (Wear OS), bukan di HP. -->
     <uses-feature android:name="android.hardware.type.watch" />

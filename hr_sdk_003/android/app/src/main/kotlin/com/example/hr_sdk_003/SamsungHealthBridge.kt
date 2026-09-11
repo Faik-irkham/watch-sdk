@@ -82,11 +82,12 @@ class SamsungHealthBridge(
      * mencakup semuanya.
      */
     private fun permissionFor(sensor: HealthSensor): String = when {
+        // Tabel izin resmi Samsung: ACCELEROMETER_CONTINUOUS menuntut
+        // ACTIVITY_RECOGNITION di semua versi Android. Izin sensor tubuh tidak
+        // cukup; layanan Samsung menolaknya dengan PERMISSION_ERROR.
+        sensor == HealthSensor.ACCELEROMETER -> Manifest.permission.ACTIVITY_RECOGNITION
         Build.VERSION.SDK_INT < 36 -> Manifest.permission.BODY_SENSORS
         sensor == HealthSensor.SPO2 -> PERMISSION_READ_OXYGEN_SATURATION
-        // Health Connect tidak punya izin khusus untuk gerak. Akselerometer
-        // menumpang izin detak jantung, yang pada Wear OS 6 teramati ikut
-        // memberikan BODY_SENSORS.
         else -> PERMISSION_READ_HEART_RATE
     }
 
