@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.example.hr_sdk_004"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -19,8 +19,12 @@ android {
         applicationId = "com.example.hr_sdk_004"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        // Samsung Health Sensor SDK butuh Wear OS 3+ (Galaxy Watch4 ke atas).
+        // AAR-nya sendiri minSdkVersion 26, tapi tracker-nya hanya jalan di Wear OS 3+.
+        minSdk = 30
+        // Ditahan di 34: mulai API 36 sistem tidak lagi memberikan
+        // BODY_SENSORS, dan Samsung Health Sensor SDK masih bergantung padanya.
+        targetSdk = 34
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
         // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
         // You can force using the value of versionCode by specifying the `-P force-version-code-ignoring-abi=true`
@@ -36,6 +40,12 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+}
+
+dependencies {
+    // Samsung Health Sensor SDK (AAR lokal di android/app/libs)
+    implementation(files("libs/samsung-health-sensor-api-1.4.1.aar"))
+    implementation("androidx.core:core-ktx:1.13.1")
 }
 
 kotlin {

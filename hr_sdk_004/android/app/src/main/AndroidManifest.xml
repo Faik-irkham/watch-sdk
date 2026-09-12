@@ -1,4 +1,18 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Akses sensor untuk Samsung Health Sensor SDK.
+         Di Wear OS 6 (Android 16 / API 36) izin sensor tubuh pindah ke Health
+         Connect, jadi READ_HEART_RATE dan READ_OXYGEN_SATURATION ikut
+         dideklarasikan; BODY_SENSORS tetap dipakai di versi sebelumnya. -->
+    <uses-permission android:name="android.permission.BODY_SENSORS" />
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+    <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION" />
+    <!-- Akselerometer tidak memakai izin sensor tubuh: menurut tabel izin resmi
+         Samsung, ACCELEROMETER_CONTINUOUS menuntut ACTIVITY_RECOGNITION di semua
+         versi Android. -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+
+    <!-- Aplikasi ini berjalan di jam (Wear OS), bukan di HP. -->
+    <uses-feature android:name="android.hardware.type.watch" />
     <application
         android:label="hr_sdk_004"
         android:name="${applicationName}"
@@ -30,6 +44,10 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Aplikasi Wear OS standalone: tidak butuh app pendamping di HP. -->
+        <meta-data
+            android:name="com.google.android.wearable.standalone"
+            android:value="true" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

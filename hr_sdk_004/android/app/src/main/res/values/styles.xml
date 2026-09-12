@@ -5,6 +5,7 @@
         <!-- Show a splash screen on the activity. Automatically removed when
              the Flutter engine draws its first frame -->
         <item name="android:windowBackground">@drawable/launch_background</item>
+        <item name="android:windowSwipeToDismiss">false</item>
     </style>
     <!-- Theme applied to the Android Window as soon as the process has started.
          This theme determines the color of the Android Window while your
@@ -14,5 +15,10 @@
          This Theme is only used starting with V2 of Flutter's Android embedding. -->
     <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
         <item name="android:windowBackground">?android:colorBackground</item>
+        <!-- Swipe-to-dismiss Wear OS merebut geser kanan dari PageView Flutter,
+             karena permukaan Flutter tidak melaporkan canScrollHorizontally().
+             Perilakunya ditiru di Dart: geser kanan di halaman pertama menutup
+             aplikasi, di halaman lain kembali satu halaman. -->
+        <item name="android:windowSwipeToDismiss">false</item>
     </style>
 </resources>
