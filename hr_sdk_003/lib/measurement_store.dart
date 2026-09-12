@@ -28,7 +28,13 @@ class MeasurementStore {
 
   Future<Database>? _db;
 
-  Future<Database> get database => _db ??= _open();
+  /// Kegagalan membuka tidak disimpan: panggilan berikutnya mencoba lagi,
+  /// alih-alih mengulang galat yang sama sampai aplikasi dimulai ulang.
+  Future<Database> get database =>
+      _db ??= _open().catchError((Object error, StackTrace stack) {
+        _db = null;
+        Error.throwWithStackTrace(error, stack);
+      });
 
   Future<Database> _open() async {
     final opener = factory ?? databaseFactory;

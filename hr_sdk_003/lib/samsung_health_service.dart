@@ -61,22 +61,24 @@ class HeartRateSample {
 
   bool get isValid => status == 1;
 
-  /// Terjemahan kode status yang umum muncul. Tabel lengkapnya ada di
-  /// dokumentasi Samsung Health Sensor SDK (ValueKey.HeartRateSet).
+  /// Arti kode status menurut tabel resmi Samsung (ValueKey.HeartRateSet).
+  /// Kode di luar tabel ditampilkan mentah, bukan diberi label karangan.
   String get statusMessage {
     switch (status) {
       case 1:
         return 'Pengukuran valid';
       case 0:
-        return 'Belum ada data';
-      case -1:
-        return 'Sinyal belum stabil';
+        return 'Memulai pengukuran…';
       case -2:
-        return 'Jam tidak menempel di pergelangan';
+        return 'Gerakan terdeteksi — tahan tangan tetap diam';
+      case -3:
+        return 'Jam terlepas dari pergelangan';
+      case -8:
+        return 'Sinyal lemah atau tangan bergerak';
       case -10:
-        return 'Jam tidak dipakai';
-      case -99:
-        return 'Gagal membaca sensor';
+        return 'Sinyal terlalu lemah atau gerakan berlebihan';
+      case -999:
+        return 'Sensor lain yang lebih prioritas sedang berjalan';
       default:
         return 'Status sensor: $status';
     }
@@ -113,6 +115,9 @@ class Spo2Sample {
   /// Pengukuran rampung; [spo2] sudah final.
   static const int statusCompleted = 2;
 
+  /// Pengukuran berakhir karena waktu habis, tanpa hasil.
+  static const int statusTimeout = -6;
+
   /// Saturasi oksigen dalam persen. Bermakna kalau [isComplete] true.
   final int spo2;
 
@@ -129,21 +134,30 @@ class Spo2Sample {
 
   bool get isCalculating => status == statusCalculating;
 
+  /// Arti kode status menurut tabel resmi Samsung (ValueKey.SpO2Set).
   String get statusMessage {
-    if (isComplete) return 'Pengukuran selesai';
-    if (isCalculating) return 'Menghitung… tahan tangan tetap diam';
-    // Kode negatif menandakan pengukuran terganggu (gerakan, sinyal lemah,
-    // jam longgar). Kodenya ditampilkan apa adanya supaya mudah dicocokkan
-    // dengan tabel di dokumentasi Samsung.
-    return 'Pengukuran terganggu — tahan tangan tetap diam (kode $status)';
+    switch (status) {
+      case statusCompleted:
+        return 'Pengukuran selesai';
+      case statusCalculating:
+        return 'Menghitung… tahan tangan tetap diam';
+      case statusTimeout:
+        return 'Waktu habis — silakan ukur ulang';
+      case -5:
+        return 'Kualitas sinyal rendah — pastikan jam menempel';
+      case -4:
+        return 'Jam bergerak saat mengukur — tahan tangan tetap diam';
+      default:
+        return 'Status sensor: $status';
+    }
   }
 }
 
 /// Satu sampel akselerometer tiga sumbu.
 ///
-/// Nilainya bilangan bulat mentah dari sensor, bukan m/s². Faktor skalanya
-/// belum terverifikasi; saat jam diam, [magnitude] semestinya setara satu
-/// gravitasi, sehingga faktor itu dapat diturunkan dari pengamatan.
+/// Nilainya bilangan bulat mentah dari sensor. Menurut dokumentasi resmi
+/// Samsung datanya tidak termasuk gravitasi, sehingga saat jam diam nilainya
+/// mendekati nol. Konversi resmi ke m/s²: nilai × 9,81 / (16383,75 / 4).
 class AccelerometerSample {
   const AccelerometerSample({
     required this.x,

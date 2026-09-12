@@ -63,4 +63,35 @@ void main() {
     expect(saved.single['spo2_percent'], 98);
     expect(saved.single['bpm'], 83);
   });
+
+  test('gagal membuka sekali tidak membuat penyimpanan gagal selamanya', () async {
+    final flaky = _FlakyFactory(databaseFactoryFfi);
+    final retrying = MeasurementStore(factory: flaky, path: inMemoryDatabasePath);
+    addTearDown(retrying.close);
+
+    await expectLater(
+      retrying.saveHeartRate(heartRate(status: 1, at: 1)),
+      throwsStateError,
+    );
+    expect(await retrying.saveHeartRate(heartRate(status: 1, at: 2)), 1);
+    expect(flaky.opens, 2);
+  });
+}
+
+/// Gagal pada pembukaan pertama, lalu meneruskan ke pabrik yang sebenarnya.
+class _FlakyFactory implements DatabaseFactory {
+  _FlakyFactory(this.inner);
+
+  final DatabaseFactory inner;
+  int opens = 0;
+
+  @override
+  Future<Database> openDatabase(String path, {OpenDatabaseOptions? options}) {
+    opens++;
+    if (opens == 1) return Future.error(StateError('disk sibuk'));
+    return inner.openDatabase(path, options: options);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

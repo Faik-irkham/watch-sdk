@@ -108,7 +108,7 @@ abstract class TrackerStreamHandler(
                 if (isFinal(payload)) {
                     mainHandler.post {
                         releaseTracker()
-                        emitStatus("completed", "Pengukuran $label selesai")
+                        emitStatus("completed", "Pengukuran $label berakhir")
                     }
                     return
                 }
@@ -214,19 +214,27 @@ class Spo2StreamHandler(
         "timestamp" to point.timestamp,
     )
 
+    // Tabel status resmi Samsung: pengukuran berakhir saat rampung (2) atau
+    // waktu habis (-6). Dokumentasi tidak menyebut apakah -4 dan -5 ikut
+    // mengakhiri, jadi keduanya diperlakukan sebagai peringatan; pengguna tetap
+    // bisa menekan Berhenti.
     override fun isFinal(payload: Map<String, Any?>): Boolean =
-        payload["spo2Status"] == SPO2_STATUS_COMPLETED
+        payload["spo2Status"] == SPO2_STATUS_COMPLETED ||
+            payload["spo2Status"] == SPO2_STATUS_TIMEOUT
 
     private companion object {
         /** Nilai STATUS saat pengukuran SpO2 rampung. */
         const val SPO2_STATUS_COMPLETED = 2
+
+        /** Nilai STATUS saat pengukuran SpO2 berhenti karena waktu habis. */
+        const val SPO2_STATUS_TIMEOUT = -6
     }
 }
 
 /**
- * Akselerometer tiga sumbu. Nilainya bilangan bulat mentah dari sensor, bukan
- * m/s²; faktor skalanya belum terverifikasi dan dapat diturunkan dari besaran
- * vektor saat jam diam, yang semestinya setara satu gravitasi.
+ * Akselerometer tiga sumbu. Nilainya bilangan bulat mentah dari sensor dan,
+ * menurut dokumentasi resmi Samsung, tidak termasuk gravitasi. Konversi resmi
+ * ke m/s²: nilai × 9,81 / (16383,75 / 4).
  *
  * Datanya berlaju tinggi dan tiba berkelompok, jadi satu kiriman diteruskan
  * sebagai satu muatan berisi deret sampel.

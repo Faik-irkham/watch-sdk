@@ -56,8 +56,14 @@ class _Spo2ViewState extends State<Spo2View>
             persist(store.saveSpo2(event));
           }
         } else if (event is TrackerStatus) {
-          setState(() => _message = event.message);
-          if (event.isCompleted) _stop(keepMessage: true);
+          // "completed" juga dikirim saat waktu habis. Pesan dari sampel
+          // terakhir ("selesai" atau "waktu habis") dipertahankan, karena
+          // pesan umum dari sisi Android tidak membedakan keduanya.
+          if (event.isCompleted) {
+            _stop(keepMessage: true);
+          } else {
+            setState(() => _message = event.message);
+          }
         }
       },
       onError: (Object error) {

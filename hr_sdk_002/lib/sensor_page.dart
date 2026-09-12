@@ -197,10 +197,15 @@ class _Spo2ViewState extends State<Spo2View>
             persist(store.saveSpo2(event));
           }
         } else if (event is TrackerStatus) {
-          setState(() => _message = event.message);
           // Pengukuran SpO2 sekali jalan: sensor sudah dimatikan di sisi
-          // Android, jadi langganan ikut ditutup.
-          if (event.isCompleted) _stop(keepMessage: true);
+          // Android, jadi langganan ikut ditutup. "completed" juga dikirim saat
+          // waktu habis; pesan dari sampel terakhir ("selesai" atau "waktu
+          // habis") dipertahankan karena pesan umum Android tidak membedakannya.
+          if (event.isCompleted) {
+            _stop(keepMessage: true);
+          } else {
+            setState(() => _message = event.message);
+          }
         }
       },
       onError: (Object error) {

@@ -42,22 +42,24 @@ class HeartRateSample {
 
   bool get isValid => status == 1;
 
-  /// Terjemahan kode status yang umum muncul. Tabel lengkapnya ada di
-  /// dokumentasi Samsung Health Sensor SDK (ValueKey.HeartRateSet).
+  /// Arti kode status menurut tabel resmi Samsung (ValueKey.HeartRateSet).
+  /// Kode di luar tabel ditampilkan mentah, bukan diberi label karangan.
   String get statusMessage {
     switch (status) {
       case 1:
         return 'Pengukuran valid';
       case 0:
-        return 'Belum ada data';
-      case -1:
-        return 'Sinyal belum stabil';
+        return 'Memulai pengukuran…';
       case -2:
-        return 'Jam tidak menempel di pergelangan';
+        return 'Gerakan terdeteksi — tahan tangan tetap diam';
+      case -3:
+        return 'Jam terlepas dari pergelangan';
+      case -8:
+        return 'Sinyal lemah atau tangan bergerak';
       case -10:
-        return 'Jam tidak dipakai';
-      case -99:
-        return 'Gagal membaca sensor';
+        return 'Sinyal terlalu lemah atau gerakan berlebihan';
+      case -999:
+        return 'Sensor lain yang lebih prioritas sedang berjalan';
       default:
         return 'Status sensor: $status';
     }
