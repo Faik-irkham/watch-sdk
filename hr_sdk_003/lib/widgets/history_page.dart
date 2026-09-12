@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hr_sdk_003/measurement_shared.dart';
 import 'package:hr_sdk_003/measurement_store.dart';
 
 /// Satu baris di halaman riwayat, sudah dalam bentuk siap tampil.
@@ -115,7 +116,9 @@ class _HistoryList extends StatelessWidget {
     return ListView.separated(
       // Bantalan lebar di atas dan bawah agar baris pertama dan terakhir tidak
       // terpotong lengkung layar bulat.
-      padding: const EdgeInsets.fromLTRB(36, 36, 36, 48),
+      // Atas lebih dalam agar judul dua baris menjauhi lengkung; bawah cukup
+      // lega agar baris terakhir bisa digulir sampai ke tengah layar.
+      padding: const EdgeInsets.fromLTRB(24, 40, 24, 56),
       itemCount: shown + 1,
       separatorBuilder: (_, index) => index == 0
           ? const SizedBox(height: 10)
@@ -136,16 +139,27 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Rata tengah: judul yang terbungkus dua baris tetap menjauhi lengkung layar.
     return Column(
       children: [
-        Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+        ),
         const SizedBox(height: 2),
-        Text(summary, style: const TextStyle(fontSize: 11, color: Colors.white54)),
+        Text(
+          summary,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 11, color: Colors.white54),
+        ),
       ],
     );
   }
 }
 
+/// Waktu di atas, nilai di bawah dengan lebar penuh: di layar sesempit ini
+/// kolom waktu di samping nilai memaksa nilai terbelah atau menempel.
 class _EntryRow extends StatelessWidget {
   const _EntryRow(this.entry);
 
@@ -156,36 +170,27 @@ class _EntryRow extends StatelessWidget {
     final detail = entry.detail;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 7),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  entry.value,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    fontFeatures: [FontFeature.tabularFigures()],
-                  ),
-                ),
-                if (detail != null)
-                  Text(detail, style: const TextStyle(fontSize: 10, color: Colors.white54)),
-              ],
-            ),
-          ),
           Text(
             formatHistoryTime(entry.at),
-            textAlign: TextAlign.right,
             style: const TextStyle(
               fontSize: 10,
               color: Colors.white54,
-              height: 1.5,
               fontFeatures: [FontFeature.tabularFigures()],
             ),
           ),
+          Text(
+            entry.value,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              fontFeatures: [FontFeature.tabularFigures()],
+            ),
+          ),
+          if (detail != null)
+            Text(detail, style: const TextStyle(fontSize: 10, color: Colors.white54)),
         ],
       ),
     );
@@ -201,31 +206,38 @@ class _Centered extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(36),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 10),
-            child ??
-                Text(
-                  text ?? '',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 11, color: Colors.white60),
-                ),
-          ],
-        ),
+    // Judul dua baris duduk paling atas, tempat lingkaran paling sempit.
+    return WatchSafeContent(
+      width: 132,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 10),
+          child ??
+              Text(
+                text ?? '',
+                textAlign: TextAlign.center,
+                // Pesan galat dari SQLite bisa sangat panjang. Tiga baris cukup
+                // untuk mengenali masalahnya, dan menjaga kolom tetap pendek
+                // agar judul di atasnya tidak terdorong ke tepi lingkaran.
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 11, color: Colors.white60),
+              ),
+        ],
       ),
     );
   }
 }
 
-/// Jam di baris pertama, tanggal di baris kedua: jam lebih sering dibaca,
-/// sedangkan tanggal membedakan sesi pengukuran.
+/// Jam lebih dulu karena paling sering dibaca; tanggal membedakan sesi.
 String formatHistoryTime(DateTime at) {
   String two(int v) => v.toString().padLeft(2, '0');
-  return '${two(at.hour)}:${two(at.minute)}:${two(at.second)}\n'
+  return '${two(at.hour)}:${two(at.minute)}:${two(at.second)} · '
       '${two(at.day)}/${two(at.month)}/${at.year}';
 }

@@ -87,10 +87,12 @@ class _HeartRateViewState extends State<HeartRateView>
   Widget build(BuildContext context) {
     final sample = _sample;
     return MeasurementLayout(
-      icon: Icons.favorite,
-      iconColor: _measuring ? Colors.redAccent : Colors.white24,
-      value: (sample != null && sample.isValid) ? '${sample.heartRate}' : '--',
-      unit: 'bpm',
+      reading: ValueReading(
+        icon: Icons.favorite,
+        iconColor: _measuring ? Colors.redAccent : Colors.white24,
+        value: (sample != null && sample.isValid) ? '${sample.heartRate}' : '--',
+        unit: 'bpm',
+      ),
       message: _message,
       footnote: savedLabel,
       buttonLabel: _measuring ? 'Berhenti' : 'Mulai',

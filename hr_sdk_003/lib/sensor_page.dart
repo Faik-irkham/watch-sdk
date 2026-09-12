@@ -81,7 +81,7 @@ class _SensorPagesState extends State<SensorPages> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.only(bottom: 4),
+                padding: const EdgeInsets.only(bottom: 8),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: List.generate(_pages.length, (index) {

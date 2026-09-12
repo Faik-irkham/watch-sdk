@@ -43,7 +43,7 @@ void main() {
     expect(find.text('250 data · 2 terbaru'), findsOneWidget);
     expect(find.text('98%'), findsOneWidget);
     expect(find.text('83 bpm'), findsOneWidget);
-    expect(find.text('14:05:09\n11/09/2026'), findsOneWidget);
+    expect(find.text('14:05:09 · 11/09/2026'), findsOneWidget);
   });
 
   testWidgets('tabel kosong menampilkan keterangan', (tester) async {

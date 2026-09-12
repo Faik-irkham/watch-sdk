@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:hr_sdk_003/measurement_shared.dart';
+import 'package:hr_sdk_003/measurement_store.dart';
 import 'package:hr_sdk_003/samsung_health_service.dart';
 import 'package:hr_sdk_003/widgets/history_page.dart';
 
@@ -70,7 +71,6 @@ class _AccelerometerViewState extends State<AccelerometerView>
   }
 
   void _openHistory() {
-    String axis(double v) => v.round().toString();
     HistoryPage.open(
       context,
       title: 'Riwayat akselerometer',
@@ -78,7 +78,7 @@ class _AccelerometerViewState extends State<AccelerometerView>
       load: () async => (await store.accelerometerHistory()).map(
         (s) => HistoryEntry(
           at: s.second,
-          value: 'x ${axis(s.meanX)} · y ${axis(s.meanY)} · z ${axis(s.meanZ)}',
+          value: formatAccelerometerMeans(s),
           detail: 'rata-rata ${s.samples} sampel, nilai mentah',
         ),
       ),
@@ -98,54 +98,36 @@ class _AccelerometerViewState extends State<AccelerometerView>
   @override
   Widget build(BuildContext context) {
     final latest = _batch?.latest;
-    final footnote = savedLabel;
     String axis(int? v) => v == null ? '--' : '$v';
 
-    return Center(
-      // Tambahkan SingleChildScrollView agar bisa digulir jika layar terlalu kecil
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(40, 8, 40, 20),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize
-                .min, // Tambahkan ini agar Column mengambil ruang seperlunya
-            children: [
-              Icon(
-                Icons.open_with,
-                color: _measuring ? Colors.amberAccent : Colors.white24,
-                size: 20,
-              ),
-              const SizedBox(height: 4),
-              _AxisRow(label: 'X', value: axis(latest?.x)),
-              _AxisRow(label: 'Y', value: axis(latest?.y)),
-              _AxisRow(label: 'Z', value: axis(latest?.z)),
-              _AxisRow(
-                label: '|a|',
-                value: latest == null
-                    ? '--'
-                    : latest.magnitude.toStringAsFixed(0),
-                dim: true,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                _message,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11, color: Colors.white60),
-              ),
-              if (footnote != null) Footnote(footnote),
-              const SizedBox(height: 8),
-              MeasurementActions(
-                buttonLabel: _measuring ? 'Berhenti' : 'Mulai',
-                onPressed: _measuring ? _stop : _start,
-                onHistory: _openHistory,
-              ),
-            ],
-          ),
+    return MeasurementLayout(
+      reading: SizedBox(
+        width: 124,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.open_with,
+              color: _measuring ? Colors.amberAccent : Colors.white24,
+              size: 18,
+            ),
+            const SizedBox(height: 2),
+            _AxisRow(label: 'X', value: axis(latest?.x)),
+            _AxisRow(label: 'Y', value: axis(latest?.y)),
+            _AxisRow(label: 'Z', value: axis(latest?.z)),
+            _AxisRow(
+              label: '|a|',
+              value: latest == null ? '--' : latest.magnitude.toStringAsFixed(0),
+              dim: true,
+            ),
+          ],
         ),
       ),
+      message: _message,
+      footnote: savedLabel,
+      buttonLabel: _measuring ? 'Berhenti' : 'Mulai',
+      onPressed: _measuring ? _stop : _start,
+      onHistory: _openHistory,
     );
   }
 }
@@ -174,7 +156,7 @@ class _AxisRow extends StatelessWidget {
             value,
             textAlign: TextAlign.right,
             style: TextStyle(
-              fontSize: 20,
+              fontSize: 18,
               fontWeight: FontWeight.w600,
               color: dim ? Colors.white60 : Colors.white,
               fontFeatures: const [FontFeature.tabularFigures()],
@@ -184,4 +166,12 @@ class _AxisRow extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Rata-rata tiga sumbu dalam satu detik. Spasi di dalam tiap pasangan sumbu
+/// tak-terputus, supaya baris hanya patah di antara sumbu, bukan di antara
+/// huruf sumbu dan nilainya.
+String formatAccelerometerMeans(AccelerometerSecond s) {
+  String axis(double v) => v.round().toString();
+  return 'x\u00A0${axis(s.meanX)} · y\u00A0${axis(s.meanY)} · z\u00A0${axis(s.meanZ)}';
 }

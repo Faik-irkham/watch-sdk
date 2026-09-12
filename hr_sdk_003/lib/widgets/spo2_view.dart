@@ -98,10 +98,12 @@ class _Spo2ViewState extends State<Spo2View>
   Widget build(BuildContext context) {
     final sample = _sample;
     return MeasurementLayout(
-      icon: Icons.water_drop,
-      iconColor: _measuring ? Colors.lightBlueAccent : Colors.white24,
-      value: (sample != null && sample.isComplete) ? '${sample.spo2}' : '--',
-      unit: '% SpO₂',
+      reading: ValueReading(
+        icon: Icons.water_drop,
+        iconColor: _measuring ? Colors.lightBlueAccent : Colors.white24,
+        value: (sample != null && sample.isComplete) ? '${sample.spo2}' : '--',
+        unit: '% SpO₂',
+      ),
       message: _message,
       footnote: savedLabel,
       buttonLabel: _measuring ? 'Berhenti' : 'Mulai',
