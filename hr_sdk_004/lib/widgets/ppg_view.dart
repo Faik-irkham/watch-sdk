@@ -27,6 +27,7 @@ class _PpgViewState extends State<PpgView> with PersistsMeasurements<PpgView> {
   PpgSample? _latest;
   String _message = 'Nilai ADC mentah LED';
   bool _measuring = false;
+  bool _failed = false;
 
   @override
   void dispose() {
@@ -36,7 +37,12 @@ class _PpgViewState extends State<PpgView> with PersistsMeasurements<PpgView> {
 
   Future<void> _start() async {
     if (!await _service.requestPermission(HealthSensor.ppg)) {
-      if (mounted) setState(() => _message = 'Izin sensor ditolak');
+      if (mounted) {
+        setState(() {
+          _message = 'Izin sensor ditolak';
+          _failed = true;
+        });
+      }
       return;
     }
     if (!mounted) return;
@@ -46,6 +52,7 @@ class _PpgViewState extends State<PpgView> with PersistsMeasurements<PpgView> {
       _latest = null;
       _wave.clear();
       _message = 'Menyambung ke sensor…';
+      _failed = false;
       resetSaved();
     });
 
@@ -55,7 +62,9 @@ class _PpgViewState extends State<PpgView> with PersistsMeasurements<PpgView> {
         setState(() {
           if (event is PpgBatch) {
             _latest = event.latest;
-            _wave.addAll(event.validSamples.map((s) => s.green).whereType<int>());
+            _wave.addAll(
+              event.validSamples.map((s) => s.green).whereType<int>(),
+            );
             if (_wave.length > _waveLength) {
               _wave.removeRange(0, _wave.length - _waveLength);
             }
@@ -73,6 +82,7 @@ class _PpgViewState extends State<PpgView> with PersistsMeasurements<PpgView> {
         setState(() {
           _measuring = false;
           _message = describeStreamError(error);
+          _failed = true;
         });
       },
     );
@@ -93,6 +103,7 @@ class _PpgViewState extends State<PpgView> with PersistsMeasurements<PpgView> {
   void _openHistory() {
     HistoryPage.open(
       context,
+      accent: SensorColors.ppg,
       title: 'Riwayat PPG',
       totalNoun: 'sampel',
       load: () async => (await store.ppgHistory()).map(
@@ -121,6 +132,9 @@ class _PpgViewState extends State<PpgView> with PersistsMeasurements<PpgView> {
     String value(int? v) => v == null ? '--' : '$v';
 
     return MeasurementLayout(
+      title: 'PPG',
+      icon: Icons.monitor_heart,
+      accent: SensorColors.ppg,
       reading: SizedBox(
         width: 124,
         child: Column(
@@ -134,7 +148,7 @@ class _PpgViewState extends State<PpgView> with PersistsMeasurements<PpgView> {
                 child: CustomPaint(
                   painter: _WavePainter(
                     List.of(_wave),
-                    color: _measuring ? Colors.greenAccent : Colors.white24,
+                    color: _measuring ? SensorColors.ppg : Colors.white24,
                   ),
                 ),
               ),
@@ -147,9 +161,11 @@ class _PpgViewState extends State<PpgView> with PersistsMeasurements<PpgView> {
         ),
       ),
       message: _message,
+      messageIsError: _failed,
       footnote: savedLabel,
-      buttonLabel: _measuring ? 'Berhenti' : 'Mulai',
-      onPressed: _measuring ? _stop : _start,
+      measuring: _measuring,
+      onStart: _start,
+      onStop: _stop,
       onHistory: _openHistory,
     );
   }
@@ -173,7 +189,13 @@ class _ChannelRow extends StatelessWidget {
           child: FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
-            child: Text(label, style: const TextStyle(fontSize: 12, color: Colors.white54)),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: SensorColors.ppg.withValues(alpha: 0.8),
+              ),
+            ),
           ),
         ),
         // Jarak tetap: tanpa ini label dan angka yang sama-sama penuh saling
@@ -249,7 +271,8 @@ class _WavePainter extends CustomPainter {
 /// Spasi di dalam tiap pasangan tak-terputus, supaya baris hanya patah di
 /// antara warna.
 String formatPpgMeans(PpgSecond s) {
-  String part(String label, double? v) => v == null ? '' : '$label ${v.round()}';
+  String part(String label, double? v) =>
+      v == null ? '' : '$label ${v.round()}';
   return [
     part('hijau', s.meanGreen),
     part('IR', s.meanIr),

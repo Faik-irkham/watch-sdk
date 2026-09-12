@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:hr_sdk_004/measurement_shared.dart';
 import 'package:hr_sdk_004/widgets/accelerometer_view.dart';
 import 'package:hr_sdk_004/widgets/heart_rate_view.dart';
 import 'package:hr_sdk_004/widgets/ppg_view.dart';
@@ -18,6 +19,14 @@ class _SensorPagesState extends State<SensorPages> {
     Spo2View(),
     AccelerometerView(),
     PpgView(),
+  ];
+
+  /// Warna titik aktif mengikuti sensor halaman yang sedang tampil.
+  static const List<Color> _accents = [
+    SensorColors.heartRate,
+    SensorColors.spo2,
+    SensorColors.accelerometer,
+    SensorColors.ppg,
   ];
 
   /// Porsi lebar layar yang harus ditarik ke kanan di halaman pertama sebelum
@@ -49,7 +58,8 @@ class _SensorPagesState extends State<SensorPages> {
         notification.dragDetails != null &&
         notification.overscroll < 0) {
       _exitPull -= notification.overscroll;
-      if (_exitPull > notification.metrics.viewportDimension * _exitPullFraction) {
+      if (_exitPull >
+          notification.metrics.viewportDimension * _exitPullFraction) {
         _exitPull = 0;
         SystemNavigator.pop();
       }
@@ -87,13 +97,15 @@ class _SensorPagesState extends State<SensorPages> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: List.generate(_pages.length, (index) {
-                    return Container(
-                      width: 6,
+                    final active = index == _page;
+                    return AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      width: active ? 14 : 6,
                       height: 6,
-                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      margin: const EdgeInsets.symmetric(horizontal: 2.5),
                       decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: index == _page ? Colors.white70 : Colors.white24,
+                        borderRadius: BorderRadius.circular(3),
+                        color: active ? _accents[index] : Colors.white24,
                       ),
                     );
                   }),

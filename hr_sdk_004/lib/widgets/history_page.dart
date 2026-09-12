@@ -22,6 +22,7 @@ class HistoryPage extends StatefulWidget {
     required this.title,
     required this.load,
     this.totalNoun = 'data',
+    this.accent = Colors.white,
   });
 
   final String title;
@@ -30,15 +31,24 @@ class HistoryPage extends StatefulWidget {
   /// Kata benda untuk jumlah total, misalnya "data" atau "sampel".
   final String totalNoun;
 
+  /// Warna sensor asal riwayat, untuk judul.
+  final Color accent;
+
   static Future<void> open(
     BuildContext context, {
     required String title,
     required Future<History<HistoryEntry>> Function() load,
     String totalNoun = 'data',
+    Color accent = Colors.white,
   }) {
     return Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => HistoryPage(title: title, load: load, totalNoun: totalNoun),
+        builder: (_) => HistoryPage(
+          title: title,
+          load: load,
+          totalNoun: totalNoun,
+          accent: accent,
+        ),
       ),
     );
   }
@@ -67,6 +77,7 @@ class _HistoryPageState extends State<HistoryPage> {
             if (snapshot.hasError) {
               return _Centered(
                 title: widget.title,
+                accent: widget.accent,
                 text: 'Gagal membaca riwayat: ${snapshot.error}',
               );
             }
@@ -74,17 +85,26 @@ class _HistoryPageState extends State<HistoryPage> {
             if (history == null) {
               return _Centered(
                 title: widget.title,
-                child: const SizedBox.square(
+                accent: widget.accent,
+                child: SizedBox.square(
                   dimension: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: widget.accent,
+                  ),
                 ),
               );
             }
             if (history.items.isEmpty) {
-              return _Centered(title: widget.title, text: 'Belum ada data tersimpan');
+              return _Centered(
+                title: widget.title,
+                accent: widget.accent,
+                text: 'Belum ada data tersimpan',
+              );
             }
             return _HistoryList(
               title: widget.title,
+              accent: widget.accent,
               history: history,
               totalNoun: widget.totalNoun,
             );
@@ -98,11 +118,13 @@ class _HistoryPageState extends State<HistoryPage> {
 class _HistoryList extends StatelessWidget {
   const _HistoryList({
     required this.title,
+    required this.accent,
     required this.history,
     required this.totalNoun,
   });
 
   final String title;
+  final Color accent;
   final History<HistoryEntry> history;
   final String totalNoun;
 
@@ -113,29 +135,34 @@ class _HistoryList extends StatelessWidget {
         ? '${history.total} $totalNoun · $shown terbaru'
         : '${history.total} $totalNoun';
 
-    return ListView.separated(
-      // Bantalan lebar di atas dan bawah agar baris pertama dan terakhir tidak
-      // terpotong lengkung layar bulat.
+    return ListView.builder(
       // Atas lebih dalam agar judul dua baris menjauhi lengkung; bawah cukup
-      // lega agar baris terakhir bisa digulir sampai ke tengah layar.
-      padding: const EdgeInsets.fromLTRB(24, 40, 24, 56),
+      // lega agar kartu terakhir bisa digulir sampai ke tengah layar.
+      padding: const EdgeInsets.fromLTRB(20, 40, 20, 56),
       itemCount: shown + 1,
-      separatorBuilder: (_, index) => index == 0
-          ? const SizedBox(height: 10)
-          : const Divider(height: 1, color: Colors.white12),
       itemBuilder: (context, index) {
-        if (index == 0) return _Header(title: title, summary: summary);
-        return _EntryRow(history.items[index - 1]);
+        if (index == 0) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _Header(title: title, summary: summary, accent: accent),
+          );
+        }
+        return _EntryCard(history.items[index - 1]);
       },
     );
   }
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.title, required this.summary});
+  const _Header({
+    required this.title,
+    required this.summary,
+    required this.accent,
+  });
 
   final String title;
   final String summary;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) {
@@ -145,7 +172,11 @@ class _Header extends StatelessWidget {
         Text(
           title,
           textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: accent,
+          ),
         ),
         const SizedBox(height: 2),
         Text(
@@ -158,31 +189,38 @@ class _Header extends StatelessWidget {
   }
 }
 
-/// Waktu di atas, nilai di bawah dengan lebar penuh: di layar sesempit ini
-/// kolom waktu di samping nilai memaksa nilai terbelah atau menempel.
-class _EntryRow extends StatelessWidget {
-  const _EntryRow(this.entry);
+/// Satu kartu per baris, rata tengah: di layar bulat, teks di tengah kartu
+/// paling lama terhindar dari lengkung saat digulir ke atas dan bawah.
+class _EntryCard extends StatelessWidget {
+  const _EntryCard(this.entry);
 
   final HistoryEntry entry;
 
   @override
   Widget build(BuildContext context) {
     final detail = entry.detail;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 7),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1C1C1E),
+        borderRadius: BorderRadius.circular(18),
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             formatHistoryTime(entry.at),
+            textAlign: TextAlign.center,
             style: const TextStyle(
               fontSize: 10,
               color: Colors.white54,
               fontFeatures: [FontFeature.tabularFigures()],
             ),
           ),
+          const SizedBox(height: 1),
           Text(
             entry.value,
+            textAlign: TextAlign.center,
             style: const TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w600,
@@ -190,7 +228,11 @@ class _EntryRow extends StatelessWidget {
             ),
           ),
           if (detail != null)
-            Text(detail, style: const TextStyle(fontSize: 10, color: Colors.white54)),
+            Text(
+              detail,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 10, color: Colors.white54),
+            ),
         ],
       ),
     );
@@ -198,9 +240,15 @@ class _EntryRow extends StatelessWidget {
 }
 
 class _Centered extends StatelessWidget {
-  const _Centered({required this.title, this.text, this.child});
+  const _Centered({
+    required this.title,
+    required this.accent,
+    this.text,
+    this.child,
+  });
 
   final String title;
+  final Color accent;
   final String? text;
   final Widget? child;
 
@@ -215,7 +263,11 @@ class _Centered extends StatelessWidget {
           Text(
             title,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: accent,
+            ),
           ),
           const SizedBox(height: 10),
           child ??

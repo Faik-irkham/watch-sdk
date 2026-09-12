@@ -15,7 +15,6 @@ class SamsungHealthApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
-        // Layar jam bulat dan hitam pekat menghemat daya OLED.
         scaffoldBackgroundColor: Colors.black,
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.redAccent,

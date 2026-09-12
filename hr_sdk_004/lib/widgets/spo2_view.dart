@@ -14,23 +14,35 @@ class Spo2View extends StatefulWidget {
 
 class _Spo2ViewState extends State<Spo2View>
     with PersistsMeasurements<Spo2View> {
+  /// Pedoman resmi Samsung (Health Sensor Data Specifications): pelacak
+  /// on-demand dipakai paling lama 30 detik.
+  static const Duration _measurementLimit = Duration(seconds: 30);
+
   final SamsungHealthService _service = SamsungHealthService();
 
   StreamSubscription<Object>? _subscription;
+  Timer? _limitTimer;
   Spo2Sample? _sample;
   String _message = 'Tekan mulai, lalu diam ±15 detik';
   bool _measuring = false;
+  bool _failed = false;
   bool _resultSaved = false;
 
   @override
   void dispose() {
+    _limitTimer?.cancel();
     _subscription?.cancel();
     super.dispose();
   }
 
   Future<void> _start() async {
     if (!await _service.requestPermission(HealthSensor.spo2)) {
-      if (mounted) setState(() => _message = 'Izin sensor ditolak');
+      if (mounted) {
+        setState(() {
+          _message = 'Izin sensor ditolak';
+          _failed = true;
+        });
+      }
       return;
     }
     if (!mounted) return;
@@ -39,6 +51,7 @@ class _Spo2ViewState extends State<Spo2View>
       _measuring = true;
       _sample = null;
       _message = 'Menyambung ke sensor…';
+      _failed = false;
       _resultSaved = false;
       resetSaved();
     });
@@ -67,18 +80,30 @@ class _Spo2ViewState extends State<Spo2View>
         }
       },
       onError: (Object error) {
+        _limitTimer?.cancel();
         if (!mounted) return;
         setState(() {
           _measuring = false;
           _message = describeStreamError(error);
+          _failed = true;
         });
       },
     );
+    _limitTimer?.cancel();
+    _limitTimer = Timer(_measurementLimit, _onLimitReached);
+  }
+
+  /// Kode -4/-5 hanya peringatan dan tidak mengakhiri pengukuran, jadi tanpa
+  /// batas ini sensor bisa menyala melewati 30 detik.
+  void _onLimitReached() {
+    if (!_measuring) return;
+    _stop(message: 'Batas 30 detik tercapai — silakan ukur ulang');
   }
 
   void _openHistory() {
     HistoryPage.open(
       context,
+      accent: SensorColors.spo2,
       title: 'Riwayat SpO₂',
       load: () async => (await store.spo2History()).map(
         (r) => HistoryEntry(
@@ -90,13 +115,19 @@ class _Spo2ViewState extends State<Spo2View>
     );
   }
 
-  Future<void> _stop({bool keepMessage = false}) async {
+  Future<void> _stop({bool keepMessage = false, String? message}) async {
+    _limitTimer?.cancel();
+    _limitTimer = null;
     await _subscription?.cancel();
     _subscription = null;
     if (!mounted) return;
     setState(() {
       _measuring = false;
-      if (!keepMessage) _message = 'Pengukuran dihentikan';
+      if (message != null) {
+        _message = message;
+      } else if (!keepMessage) {
+        _message = 'Pengukuran dihentikan';
+      }
     });
   }
 
@@ -104,16 +135,20 @@ class _Spo2ViewState extends State<Spo2View>
   Widget build(BuildContext context) {
     final sample = _sample;
     return MeasurementLayout(
+      title: 'SpO₂',
+      icon: Icons.water_drop,
+      accent: SensorColors.spo2,
       reading: ValueReading(
-        icon: Icons.water_drop,
-        iconColor: _measuring ? Colors.lightBlueAccent : Colors.white24,
         value: (sample != null && sample.isComplete) ? '${sample.spo2}' : '--',
-        unit: '% SpO₂',
+        unit: '%',
       ),
       message: _message,
+      messageIsError: _failed,
       footnote: savedLabel,
-      buttonLabel: _measuring ? 'Berhenti' : 'Mulai',
-      onPressed: _measuring ? _stop : _start,
+      measuring: _measuring,
+      countdown: _measurementLimit,
+      onStart: _start,
+      onStop: _stop,
       onHistory: _openHistory,
     );
   }

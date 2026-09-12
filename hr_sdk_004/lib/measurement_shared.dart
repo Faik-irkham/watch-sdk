@@ -1,6 +1,21 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hr_sdk_004/measurement_store.dart';
+
+/// Warna penanda tiap sensor: judul, tombol, cincin pengukuran, dan titik
+/// penanda halaman.
+abstract final class SensorColors {
+  static const heartRate = Color(0xFFFF6B6B);
+  static const spo2 = Color(0xFF4FC3F7);
+  static const accelerometer = Color(0xFFFFD54F);
+  static const ppg = Color(0xFF69F0AE);
+}
+
+/// Merah muda lembut untuk pesan galat; tetap terbaca di latar hitam.
+const errorTextColor = Color(0xFFFFB4AB);
 
 /// Menulis ke SQLite tanpa menahan aliran data
 mixin PersistsMeasurements<T extends StatefulWidget> on State<T> {
@@ -43,7 +58,11 @@ String describeStreamError(Object error) => error is PlatformException
 /// misalnya saat ukuran huruf jam diperbesar atau pesan galat panjang. Tidak
 /// ada yang overflow, dan tombol tidak pernah terdorong keluar layar.
 class WatchSafeContent extends StatelessWidget {
-  const WatchSafeContent({super.key, required this.child, this.width = designWidth});
+  const WatchSafeContent({
+    super.key,
+    required this.child,
+    this.width = designWidth,
+  });
 
   /// Lebar susunan isi. Pada ketinggian tengah layar bulat, lebar ini masih
   /// berada di dalam lingkaran.
@@ -72,66 +91,146 @@ class WatchSafeContent extends StatelessWidget {
   }
 }
 
-/// Tata letak bersama ketiga halaman pengukuran: bacaan sensor, pesan status,
-/// keterangan penyimpanan, lalu tombol.
+/// Tata letak bersama halaman pengukuran: judul sensor di atas, bacaan dan
+/// pesan di tengah, tombol di bawah, dan cincin di tepi layar selama mengukur.
+///
+/// Judul dan tombol berada di posisi dan ukuran tetap di semua halaman. Hanya
+/// bagian tengah yang diperkecil bila tidak muat, dan ruang pesannya
+/// dicadangkan tetap, jadi ukuran bacaan tidak melompat saat pesan berganti.
 class MeasurementLayout extends StatelessWidget {
   const MeasurementLayout({
     super.key,
+    required this.title,
+    required this.icon,
+    required this.accent,
     required this.reading,
     required this.message,
-    required this.buttonLabel,
-    required this.onPressed,
+    required this.measuring,
+    required this.onStart,
+    required this.onStop,
+    this.messageIsError = false,
     this.footnote,
     this.onHistory,
+    this.countdown,
   });
 
+  final String title;
+  final IconData icon;
+  final Color accent;
   final Widget reading;
   final String message;
-  final String buttonLabel;
-  final VoidCallback onPressed;
+  final bool messageIsError;
+  final bool measuring;
+  final VoidCallback onStart;
+  final VoidCallback onStop;
   final String? footnote;
   final VoidCallback? onHistory;
 
+  /// Bila diisi, cincin tepi menghitung mundur selama durasi ini. Tanpa itu,
+  /// cincin menyala penuh selama pengukuran berjalan.
+  final Duration? countdown;
+
   @override
   Widget build(BuildContext context) {
-    return WatchSafeContent(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          reading,
-          const SizedBox(height: 6),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 11, color: Colors.white60),
+    final limit = countdown;
+    return Stack(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 26),
+          child: Column(
+            children: [
+              // Puncak layar paling sempit: judul dibatasi selebar ini dan
+              // mengecil sendiri bila ukuran huruf jam diperbesar.
+              SizedBox(
+                width: 104,
+                height: 16,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: SensorTitle(icon: icon, title: title, color: accent),
+                ),
+              ),
+              Expanded(
+                child: Center(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: SizedBox(
+                      width: WatchSafeContent.designWidth,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          reading,
+                          const SizedBox(height: 6),
+                          _StatusText(
+                            message: message,
+                            isError: messageIsError,
+                            footnote: footnote,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              MeasurementActions(
+                measuring: measuring,
+                accent: accent,
+                onPressed: measuring ? onStop : onStart,
+                onHistory: onHistory,
+              ),
+            ],
           ),
-          if (footnote != null) Footnote(footnote!),
-          const SizedBox(height: 8),
-          MeasurementActions(
-            buttonLabel: buttonLabel,
-            onPressed: onPressed,
-            onHistory: onHistory,
+        ),
+        if (measuring)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: limit == null
+                  ? MeasuringRing(color: accent)
+                  : CountdownRing(duration: limit, color: accent),
+            ),
           ),
-        ],
-      ),
+      ],
     );
   }
 }
 
-/// Satu angka besar beserta ikon dan satuannya, untuk detak jantung dan SpO2.
-class ValueReading extends StatelessWidget {
-  const ValueReading({
+/// Ikon dan nama sensor dalam warna sensornya.
+class SensorTitle extends StatelessWidget {
+  const SensorTitle({
     super.key,
     required this.icon,
-    required this.iconColor,
-    required this.value,
-    required this.unit,
+    required this.title,
+    required this.color,
   });
 
   final IconData icon;
-  final Color iconColor;
+  final String title;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: color, size: 13),
+        const SizedBox(width: 4),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.2,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Satu angka besar beserta satuannya, untuk detak jantung dan SpO2.
+class ValueReading extends StatelessWidget {
+  const ValueReading({super.key, required this.value, required this.unit});
+
   final String value;
   final String unit;
 
@@ -140,89 +239,258 @@ class ValueReading extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Mengecil sendiri bila angka dan ikon lebih lebar dari area isi.
         FittedBox(
           fit: BoxFit.scaleDown,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: iconColor, size: 20),
-              const SizedBox(width: 6),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 44,
-                  fontWeight: FontWeight.w600,
-                  height: 1,
-                  fontFeatures: [FontFeature.tabularFigures()],
-                ),
-              ),
-            ],
+          child: Text(
+            value,
+            style: const TextStyle(
+              fontSize: 46,
+              fontWeight: FontWeight.w600,
+              height: 1,
+              fontFeatures: [FontFeature.tabularFigures()],
+            ),
           ),
         ),
-        Text(unit, style: const TextStyle(color: Colors.white54)),
+        const SizedBox(height: 2),
+        Text(unit, style: const TextStyle(fontSize: 12, color: Colors.white54)),
       ],
     );
   }
 }
 
-/// Tombol utama pengukuran, diikuti tombol riwayat bila tersedia.
-class MeasurementActions extends StatelessWidget {
-  const MeasurementActions({
-    super.key,
-    required this.buttonLabel,
-    required this.onPressed,
-    this.onHistory,
+/// Pesan status dan keterangan penyimpanan di bawahnya.
+class _StatusText extends StatelessWidget {
+  const _StatusText({
+    required this.message,
+    required this.isError,
+    this.footnote,
   });
 
-  final String buttonLabel;
-  final VoidCallback onPressed;
-  final VoidCallback? onHistory;
+  final String message;
+  final bool isError;
+  final String? footnote;
+
+  static const double _messageSize = 11;
+  static const double _footnoteSize = 10;
+  static const double _lineHeight = 1.2;
 
   @override
   Widget build(BuildContext context) {
-    final history = onHistory;
-    // Mengecil sendiri bila label memanjang karena ukuran huruf diperbesar.
-    return FittedBox(
-      fit: BoxFit.scaleDown,
-      child: Row(
+    final scaler = MediaQuery.textScalerOf(context);
+    // Dua baris pesan dan satu baris keterangan selalu dicadangkan, supaya
+    // bacaan di atasnya tidak berubah ukuran saat pesan memanjang atau
+    // keterangan "tersimpan" muncul.
+    final reserved =
+        (scaler.scale(_messageSize) * 2 + scaler.scale(_footnoteSize)) *
+        _lineHeight;
+    final note = footnote;
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        minHeight: reserved,
+        minWidth: double.infinity,
+      ),
+      child: Column(
         mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          FilledButton(
-            onPressed: onPressed,
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 18),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: _messageSize,
+              height: _lineHeight,
+              color: isError ? errorTextColor : Colors.white60,
             ),
-            child: Text(buttonLabel),
           ),
-          if (history != null) ...[
-            const SizedBox(width: 6),
-            IconButton.filledTonal(
-              onPressed: history,
-              tooltip: 'Riwayat',
-              visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.history, size: 20),
+          if (note != null)
+            Text(
+              note,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: _footnoteSize,
+                height: _lineHeight,
+                color: Colors.white38,
+              ),
             ),
-          ],
         ],
       ),
     );
   }
 }
 
-class Footnote extends StatelessWidget {
-  const Footnote(this.text, {super.key});
+/// Tombol utama pengukuran, diikuti tombol riwayat bila tersedia.
+///
+/// Mulai berwarna penuh; Berhenti berwarna lembut, jadi keadaan pengukuran
+/// terbaca dari tombolnya saja.
+class MeasurementActions extends StatelessWidget {
+  const MeasurementActions({
+    super.key,
+    required this.measuring,
+    required this.accent,
+    required this.onPressed,
+    this.onHistory,
+  });
 
-  final String text;
+  final bool measuring;
+  final Color accent;
+  final VoidCallback onPressed;
+  final VoidCallback? onHistory;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 2),
-      child: Text(
-        text,
-        style: const TextStyle(fontSize: 10, color: Colors.white38),
+    final history = onHistory;
+    // Ukuran tetap: tombol hanya mengecil bila label memanjang karena ukuran
+    // huruf jam diperbesar, tidak ikut isi di atasnya.
+    return SizedBox(
+      width: 136,
+      height: 48,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FilledButton(
+              onPressed: onPressed,
+              style: FilledButton.styleFrom(
+                backgroundColor: measuring
+                    ? accent.withValues(alpha: 0.18)
+                    : accent,
+                foregroundColor: measuring ? accent : Colors.black,
+                minimumSize: const Size(88, 40),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                // Gaya tema ditebalkan, bukan diganti: TextStyle baru akan
+                // membuang keluarga fon tema.
+                textStyle: Theme.of(context).textTheme.labelLarge
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              child: Text(measuring ? 'Berhenti' : 'Mulai'),
+            ),
+            if (history != null) ...[
+              const SizedBox(width: 6),
+              IconButton.filledTonal(
+                onPressed: history,
+                tooltip: 'Riwayat',
+                visualDensity: VisualDensity.compact,
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.white12,
+                  foregroundColor: Colors.white70,
+                ),
+                icon: const Icon(Icons.history, size: 20),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
+}
+
+/// Cincin tipis mengikuti tepi layar bulat selama pengukuran berjalan.
+/// [progress] 0–1 menggambar busur dari arah jam 12; tanpa itu cincin penuh.
+class MeasuringRing extends StatelessWidget {
+  const MeasuringRing({super.key, required this.color, this.progress});
+
+  final Color color;
+  final double? progress;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: Size.infinite,
+      painter: _RingPainter(color: color, progress: progress),
+    );
+  }
+}
+
+/// Cincin yang menyusut dari penuh ke kosong selama [duration].
+class CountdownRing extends StatefulWidget {
+  const CountdownRing({super.key, required this.duration, required this.color});
+
+  final Duration duration;
+  final Color color;
+
+  @override
+  State<CountdownRing> createState() => _CountdownRingState();
+}
+
+class _CountdownRingState extends State<CountdownRing> {
+  /// Timer, bukan animasi: animasi meminta frame terus-menerus sampai selesai,
+  /// sehingga pumpAndSettle di test ikut menunggu seluruh durasi. Empat
+  /// langkah per detik sudah halus untuk cincin 30 detik.
+  static const Duration _step = Duration(milliseconds: 250);
+
+  Timer? _timer;
+  Duration _elapsed = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(_step, (timer) {
+      setState(() => _elapsed += _step);
+      if (_elapsed >= widget.duration) timer.cancel();
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final remaining =
+        1 - _elapsed.inMilliseconds / widget.duration.inMilliseconds;
+    return MeasuringRing(color: widget.color, progress: remaining.clamp(0, 1));
+  }
+}
+
+class _RingPainter extends CustomPainter {
+  _RingPainter({required this.color, this.progress});
+
+  final Color color;
+  final double? progress;
+
+  static const double _stroke = 3;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final circle = Rect.fromCircle(
+      center: size.center(Offset.zero),
+      radius: size.shortestSide / 2 - _stroke / 2 - 1,
+    );
+    Paint stroke(Color c) => Paint()
+      ..color = c
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = _stroke
+      ..strokeCap = StrokeCap.round;
+
+    final value = progress;
+    if (value == null) {
+      canvas.drawArc(circle, 0, 2 * math.pi, false, stroke(color));
+      return;
+    }
+    canvas.drawArc(
+      circle,
+      0,
+      2 * math.pi,
+      false,
+      stroke(color.withValues(alpha: 0.15)),
+    );
+    if (value > 0) {
+      canvas.drawArc(
+        circle,
+        -math.pi / 2,
+        2 * math.pi * value,
+        false,
+        stroke(color),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_RingPainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.progress != progress;
 }

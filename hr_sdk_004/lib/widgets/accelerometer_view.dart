@@ -21,6 +21,7 @@ class _AccelerometerViewState extends State<AccelerometerView>
   AccelerometerBatch? _batch;
   String _message = 'Nilai mentah sensor, belum m/s²';
   bool _measuring = false;
+  bool _failed = false;
 
   @override
   void dispose() {
@@ -30,7 +31,12 @@ class _AccelerometerViewState extends State<AccelerometerView>
 
   Future<void> _start() async {
     if (!await _service.requestPermission(HealthSensor.accelerometer)) {
-      if (mounted) setState(() => _message = 'Izin sensor ditolak');
+      if (mounted) {
+        setState(() {
+          _message = 'Izin sensor ditolak';
+          _failed = true;
+        });
+      }
       return;
     }
     if (!mounted) return;
@@ -39,6 +45,7 @@ class _AccelerometerViewState extends State<AccelerometerView>
       _measuring = true;
       _batch = null;
       _message = 'Menyambung ke sensor…';
+      _failed = false;
       resetSaved();
     });
 
@@ -65,6 +72,7 @@ class _AccelerometerViewState extends State<AccelerometerView>
         setState(() {
           _measuring = false;
           _message = describeStreamError(error);
+          _failed = true;
         });
       },
     );
@@ -73,6 +81,7 @@ class _AccelerometerViewState extends State<AccelerometerView>
   void _openHistory() {
     HistoryPage.open(
       context,
+      accent: SensorColors.accelerometer,
       title: 'Riwayat akselerometer',
       totalNoun: 'sampel',
       load: () async => (await store.accelerometerHistory()).map(
@@ -101,32 +110,33 @@ class _AccelerometerViewState extends State<AccelerometerView>
     String axis(int? v) => v == null ? '--' : '$v';
 
     return MeasurementLayout(
+      title: 'Akselerometer',
+      icon: Icons.open_with,
+      accent: SensorColors.accelerometer,
       reading: SizedBox(
         width: 124,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.open_with,
-              color: _measuring ? Colors.amberAccent : Colors.white24,
-              size: 18,
-            ),
-            const SizedBox(height: 2),
             _AxisRow(label: 'X', value: axis(latest?.x)),
             _AxisRow(label: 'Y', value: axis(latest?.y)),
             _AxisRow(label: 'Z', value: axis(latest?.z)),
             _AxisRow(
               label: '|a|',
-              value: latest == null ? '--' : latest.magnitude.toStringAsFixed(0),
+              value: latest == null
+                  ? '--'
+                  : latest.magnitude.toStringAsFixed(0),
               dim: true,
             ),
           ],
         ),
       ),
       message: _message,
+      messageIsError: _failed,
       footnote: savedLabel,
-      buttonLabel: _measuring ? 'Berhenti' : 'Mulai',
-      onPressed: _measuring ? _stop : _start,
+      measuring: _measuring,
+      onStart: _start,
+      onStop: _stop,
       onHistory: _openHistory,
     );
   }
@@ -148,7 +158,10 @@ class _AxisRow extends StatelessWidget {
           width: 32,
           child: Text(
             label,
-            style: const TextStyle(fontSize: 13, color: Colors.white54),
+            style: TextStyle(
+              fontSize: 13,
+              color: SensorColors.accelerometer.withValues(alpha: 0.8),
+            ),
           ),
         ),
         Expanded(

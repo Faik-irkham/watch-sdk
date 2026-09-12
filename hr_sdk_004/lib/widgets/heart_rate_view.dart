@@ -20,6 +20,7 @@ class _HeartRateViewState extends State<HeartRateView>
   HeartRateSample? _sample;
   String _message = 'Tekan mulai untuk mengukur';
   bool _measuring = false;
+  bool _failed = false;
 
   @override
   void dispose() {
@@ -29,7 +30,12 @@ class _HeartRateViewState extends State<HeartRateView>
 
   Future<void> _start() async {
     if (!await _service.requestPermission(HealthSensor.heartRate)) {
-      if (mounted) setState(() => _message = 'Izin sensor ditolak');
+      if (mounted) {
+        setState(() {
+          _message = 'Izin sensor ditolak';
+          _failed = true;
+        });
+      }
       return;
     }
     if (!mounted) return;
@@ -38,6 +44,7 @@ class _HeartRateViewState extends State<HeartRateView>
       _measuring = true;
       _sample = null;
       _message = 'Menyambung ke sensor…';
+      _failed = false;
       resetSaved();
     });
 
@@ -59,6 +66,7 @@ class _HeartRateViewState extends State<HeartRateView>
         setState(() {
           _measuring = false;
           _message = describeStreamError(error);
+          _failed = true;
         });
       },
     );
@@ -67,9 +75,11 @@ class _HeartRateViewState extends State<HeartRateView>
   void _openHistory() {
     HistoryPage.open(
       context,
+      accent: SensorColors.heartRate,
       title: 'Riwayat detak jantung',
-      load: () async => (await store.heartRateHistory())
-          .map((r) => HistoryEntry(at: r.measuredAt, value: '${r.bpm} bpm')),
+      load: () async => (await store.heartRateHistory()).map(
+        (r) => HistoryEntry(at: r.measuredAt, value: '${r.bpm} bpm'),
+      ),
     );
   }
 
@@ -87,16 +97,21 @@ class _HeartRateViewState extends State<HeartRateView>
   Widget build(BuildContext context) {
     final sample = _sample;
     return MeasurementLayout(
+      title: 'Detak jantung',
+      icon: Icons.favorite,
+      accent: SensorColors.heartRate,
       reading: ValueReading(
-        icon: Icons.favorite,
-        iconColor: _measuring ? Colors.redAccent : Colors.white24,
-        value: (sample != null && sample.isValid) ? '${sample.heartRate}' : '--',
+        value: (sample != null && sample.isValid)
+            ? '${sample.heartRate}'
+            : '--',
         unit: 'bpm',
       ),
       message: _message,
+      messageIsError: _failed,
       footnote: savedLabel,
-      buttonLabel: _measuring ? 'Berhenti' : 'Mulai',
-      onPressed: _measuring ? _stop : _start,
+      measuring: _measuring,
+      onStart: _start,
+      onStop: _stop,
       onHistory: _openHistory,
     );
   }

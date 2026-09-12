@@ -29,7 +29,7 @@ void main() {
     await tester.fling(find.byType(PageView), const Offset(-400, 0), 1000);
     await tester.pumpAndSettle();
 
-    expect(find.text('% SpO₂'), findsOneWidget);
+    expect(find.text('SpO₂'), findsOneWidget);
     expect(find.text('bpm'), findsNothing);
   });
 
@@ -94,7 +94,7 @@ void main() {
       await tester.fling(find.byType(PageView), const Offset(400, 0), 1000);
       await tester.pumpAndSettle();
 
-      expect(find.text('% SpO₂'), findsOneWidget);
+      expect(find.text('SpO₂'), findsOneWidget);
       expect(platformCalls, isNot(contains('SystemNavigator.pop')));
     });
 
@@ -108,7 +108,7 @@ void main() {
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
 
-      expect(find.text('% SpO₂'), findsOneWidget);
+      expect(find.text('SpO₂'), findsOneWidget);
       expect(platformCalls, isNot(contains('SystemNavigator.pop')));
     });
 
