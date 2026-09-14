@@ -156,9 +156,11 @@ class Spo2Sample {
 
 /// Satu sampel akselerometer tiga sumbu.
 ///
-/// Nilainya bilangan bulat mentah dari sensor. Menurut dokumentasi resmi
-/// Samsung datanya tidak termasuk gravitasi, sehingga saat jam diam nilainya
-/// mendekati nol. Konversi resmi ke m/s²: nilai × 9,81 / (16383,75 / 4).
+/// Nilainya bilangan bulat mentah dari sensor. Referensi API Samsung
+/// (ValueKey.AccelerometerSet) menyebut gravitasi tidak termasuk, tetapi
+/// pengukuran di Galaxy Watch4 (Wear OS 6, SDK 1.4.1) menunjukkan sebaliknya:
+/// jam diam dengan layar menghadap atas terbaca z ≈ +4096 (≈ 1 g). Konversi
+/// resmi ke m/s²: nilai × 9,81 / (16383,75 / 4).
 class AccelerometerSample {
   const AccelerometerSample({
     required this.x,
@@ -313,6 +315,12 @@ class SamsungHealthService {
   /// Daftar tracker yang didukung jam ini. Kosong sebelum ada koneksi aktif.
   Future<List<String>> supportedTrackers() async =>
       (await _methods.invokeListMethod<String>('supportedTrackers')) ?? const [];
+
+  /// Menyalakan atau melepas flag layar tetap menyala. Widget memakainya lewat
+  /// KeepScreenOn, supaya halaman yang selesai tidak melepas flag milik halaman
+  /// lain yang masih mengukur.
+  Future<void> keepScreenOn(bool on) =>
+      _methods.invokeMethod<void>('keepScreenOn', {'on': on});
 
   /// Mengalirkan [HeartRateSample] dan [TrackerStatus].
   Stream<Object> heartRateStream() =>

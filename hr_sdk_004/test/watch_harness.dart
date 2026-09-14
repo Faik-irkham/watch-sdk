@@ -179,7 +179,8 @@ final historyScenarios = <String, (String, String, History<HistoryEntry>)>{
   'riwayat detak jantung': (
     'Riwayat detak jantung',
     'data',
-    History(_entries('220 bpm'), 90000),
+    // Format ringkasan sesi dengan nilai terlebar.
+    History(_entries('220 bpm · 220–220', 'HRV 999 ms · 59 mnt 59 dtk'), 90000),
   ),
   'riwayat SpO2': ('Riwayat SpO₂', 'data', History(_entries('100%', '220 bpm'), 9000)),
   'riwayat akselerometer': (

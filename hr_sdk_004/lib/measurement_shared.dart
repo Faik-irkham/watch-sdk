@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hr_sdk_004/measurement_store.dart';
+import 'package:hr_sdk_004/samsung_health_service.dart';
 
 /// Warna penanda tiap sensor: judul, tombol, cincin pengukuran, dan titik
 /// penanda halaman.
@@ -93,6 +94,7 @@ class WatchSafeContent extends StatelessWidget {
 
 /// Tata letak bersama halaman pengukuran: judul sensor di atas, bacaan dan
 /// pesan di tengah, tombol di bawah, dan cincin di tepi layar selama mengukur.
+/// Selama mengukur, layar juga dijaga tetap menyala.
 ///
 /// Judul dan tombol berada di posisi dan ukuran tetap di semua halaman. Hanya
 /// bagian tengah yang diperkecil bila tidak muat, dan ruang pesannya
@@ -133,64 +135,122 @@ class MeasurementLayout extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final limit = countdown;
-    return Stack(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 26),
-          child: Column(
-            children: [
-              // Puncak layar paling sempit: judul dibatasi selebar ini dan
-              // mengecil sendiri bila ukuran huruf jam diperbesar.
-              SizedBox(
-                width: 104,
-                height: 16,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: SensorTitle(icon: icon, title: title, color: accent),
-                ),
-              ),
-              Expanded(
-                child: Center(
+    return KeepScreenOn(
+      active: measuring,
+      child: Stack(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 26),
+            child: Column(
+              children: [
+                // Puncak layar paling sempit: judul dibatasi selebar ini dan
+                // mengecil sendiri bila ukuran huruf jam diperbesar.
+                SizedBox(
+                  width: 104,
+                  height: 16,
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
-                    child: SizedBox(
-                      width: WatchSafeContent.designWidth,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          reading,
-                          const SizedBox(height: 6),
-                          _StatusText(
-                            message: message,
-                            isError: messageIsError,
-                            footnote: footnote,
-                          ),
-                        ],
+                    child: SensorTitle(icon: icon, title: title, color: accent),
+                  ),
+                ),
+                Expanded(
+                  child: Center(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: SizedBox(
+                        width: WatchSafeContent.designWidth,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            reading,
+                            const SizedBox(height: 6),
+                            _StatusText(
+                              message: message,
+                              isError: messageIsError,
+                              footnote: footnote,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              MeasurementActions(
-                measuring: measuring,
-                accent: accent,
-                onPressed: measuring ? onStop : onStart,
-                onHistory: onHistory,
-              ),
-            ],
-          ),
-        ),
-        if (measuring)
-          Positioned.fill(
-            child: IgnorePointer(
-              child: limit == null
-                  ? MeasuringRing(color: accent)
-                  : CountdownRing(duration: limit, color: accent),
+                MeasurementActions(
+                  measuring: measuring,
+                  accent: accent,
+                  onPressed: measuring ? onStop : onStart,
+                  onHistory: onHistory,
+                ),
+              ],
             ),
           ),
-      ],
+          if (measuring)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: limit == null
+                    ? MeasuringRing(color: accent)
+                    : CountdownRing(duration: limit, color: accent),
+              ),
+            ),
+        ],
+      ),
     );
   }
+}
+
+/// Menjaga layar jam tetap menyala selama [active], supaya layar tidak mati
+/// di tengah pengukuran dan aplikasi tetap di latar depan, seperti yang
+/// diminta pedoman Samsung Health Sensor SDK.
+class KeepScreenOn extends StatefulWidget {
+  const KeepScreenOn({super.key, required this.active, required this.child});
+
+  final bool active;
+  final Widget child;
+
+  @override
+  State<KeepScreenOn> createState() => _KeepScreenOnState();
+}
+
+class _KeepScreenOnState extends State<KeepScreenOn> {
+  /// Saat bergeser antarhalaman, dua halaman bisa hidup bersamaan. Flag
+  /// jendela baru dilepas saat tidak ada satu pun yang masih memintanya.
+  static int _holders = 0;
+
+  bool _holding = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _hold(widget.active);
+  }
+
+  @override
+  void didUpdateWidget(KeepScreenOn oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _hold(widget.active);
+  }
+
+  @override
+  void dispose() {
+    _hold(false);
+    super.dispose();
+  }
+
+  void _hold(bool hold) {
+    if (hold == _holding) return;
+    _holding = hold;
+    _holders += hold ? 1 : -1;
+    // Hanya peralihan dari tidak ada ke ada peminta, dan sebaliknya, yang
+    // menyentuh platform.
+    if (_holders == (hold ? 1 : 0)) {
+      SamsungHealthService().keepScreenOn(hold).catchError((Object error) {
+        debugPrint('Gagal mengatur layar tetap menyala: $error');
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 /// Ikon dan nama sensor dalam warna sensornya.

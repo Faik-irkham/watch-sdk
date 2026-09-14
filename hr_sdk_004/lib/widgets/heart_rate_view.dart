@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:hr_sdk_004/heart_rate_summary.dart';
 import 'package:hr_sdk_004/measurement_shared.dart';
+import 'package:hr_sdk_004/measurement_store.dart';
 import 'package:hr_sdk_004/samsung_health_service.dart';
 import 'package:hr_sdk_004/widgets/history_page.dart';
 
@@ -18,6 +20,9 @@ class _HeartRateViewState extends State<HeartRateView>
 
   StreamSubscription<Object>? _subscription;
   HeartRateSample? _sample;
+
+  /// Pembacaan absah sesi ini, untuk ringkasan saat pengukuran dihentikan.
+  final List<HeartRateBeat> _beats = [];
   String _message = 'Tekan mulai untuk mengukur';
   bool _measuring = false;
   bool _failed = false;
@@ -43,6 +48,7 @@ class _HeartRateViewState extends State<HeartRateView>
     setState(() {
       _measuring = true;
       _sample = null;
+      _beats.clear();
       _message = 'Menyambung ke sensor…';
       _failed = false;
       resetSaved();
@@ -55,6 +61,7 @@ class _HeartRateViewState extends State<HeartRateView>
           if (event is HeartRateSample) {
             _sample = event;
             _message = event.statusMessage;
+            _record(event);
           } else if (event is TrackerStatus) {
             _message = event.message;
           }
@@ -72,14 +79,41 @@ class _HeartRateViewState extends State<HeartRateView>
     );
   }
 
+  /// Titik yang sama bisa terkirim ulang saat layar mati; salinannya dilewati.
+  void _record(HeartRateSample sample) {
+    if (!sample.isValid) return;
+    if (_beats.isNotEmpty && !sample.timestamp.isAfter(_beats.last.at)) return;
+    _beats.add(
+      HeartRateBeat(
+        at: sample.timestamp,
+        bpm: sample.heartRate,
+        ibi: sample.ibi,
+        ibiStatus: sample.ibiStatus,
+      ),
+    );
+  }
+
   void _openHistory() {
     HistoryPage.open(
       context,
       accent: SensorColors.heartRate,
       title: 'Riwayat detak jantung',
-      load: () async => (await store.heartRateHistory()).map(
-        (r) => HistoryEntry(at: r.measuredAt, value: '${r.bpm} bpm'),
-      ),
+      itemNoun: 'sesi',
+      load: () async {
+        final beats = await store.heartRateBeats();
+        final sessions = summarizeSessions(
+          beats.items,
+          truncated: beats.items.length < beats.total,
+        );
+        return History([
+          for (final s in sessions)
+            HistoryEntry(
+              at: s.start,
+              value: formatBpmRange(s),
+              detail: '${formatHrv(s)} · ${formatSessionDuration(s.duration)}',
+            ),
+        ], beats.total);
+      },
     );
   }
 
@@ -87,9 +121,12 @@ class _HeartRateViewState extends State<HeartRateView>
     await _subscription?.cancel();
     _subscription = null;
     if (!mounted) return;
+    final summary = HeartRateSummary.of(_beats);
     setState(() {
       _measuring = false;
-      _message = 'Pengukuran dihentikan';
+      _message = summary == null
+          ? 'Pengukuran dihentikan'
+          : describeSession(summary);
     });
   }
 
@@ -116,3 +153,24 @@ class _HeartRateViewState extends State<HeartRateView>
     );
   }
 }
+
+/// Rata-rata dan rentang bpm satu sesi, misalnya "76 bpm · 73–87".
+String formatBpmRange(HeartRateSummary s) =>
+    '${s.meanBpm.round()} bpm · ${s.minBpm}–${s.maxBpm}';
+
+/// HRV satu sesi, atau keterangan bila IBI berurutannya belum cukup.
+String formatHrv(HeartRateSummary s) {
+  final rmssd = s.rmssd;
+  return rmssd == null ? 'HRV: IBI belum cukup' : 'HRV ${rmssd.round()} ms';
+}
+
+/// Lama sesi, misalnya "45 dtk" atau "3 mnt 5 dtk".
+String formatSessionDuration(Duration duration) {
+  final seconds = duration.inSeconds;
+  if (seconds < 60) return '$seconds dtk';
+  return '${seconds ~/ 60} mnt ${seconds % 60} dtk';
+}
+
+/// Pesan setelah pengukuran dihentikan: rata-rata dan rentang, lalu HRV.
+String describeSession(HeartRateSummary s) =>
+    'Rata-rata ${formatBpmRange(s)}\n${formatHrv(s)}';

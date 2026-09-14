@@ -90,11 +90,14 @@ void main() {
         await store.saveHeartRate(heartRate(status: 1, bpm: 70 + i, at: i * 1000));
       }
 
-      final history = await store.heartRateHistory(limit: 3);
+      final history = await store.heartRateBeats(limit: 3);
 
       expect(history.total, 5);
       expect(history.items.map((r) => r.bpm), [75, 74, 73]);
-      expect(history.items.first.measuredAt, DateTime.fromMillisecondsSinceEpoch(5000));
+      expect(history.items.first.at, DateTime.fromMillisecondsSinceEpoch(5000));
+      // IBI ikut dimuat untuk menghitung HRV per sesi.
+      expect(history.items.first.ibi, [677, 682]);
+      expect(history.items.first.ibiStatus, [0, 0]);
     });
 
     test('SpO2: hanya hasil selesai yang muncul', () async {
@@ -139,7 +142,7 @@ void main() {
     });
 
     test('tabel kosong menghasilkan riwayat kosong', () async {
-      final history = await store.heartRateHistory();
+      final history = await store.heartRateBeats();
       expect(history.items, isEmpty);
       expect(history.total, 0);
     });

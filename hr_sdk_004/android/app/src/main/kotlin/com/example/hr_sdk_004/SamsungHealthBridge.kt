@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Activity
 import android.content.pm.PackageManager
 import android.os.Build
+import android.view.WindowManager
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import io.flutter.plugin.common.BinaryMessenger
@@ -26,7 +27,8 @@ enum class HealthSensor(val key: String) {
 /**
  * Menjembatani Samsung Health Sensor SDK ke Flutter.
  *
- * - MethodChannel [METHOD_CHANNEL] untuk izin dan daftar tracker yang didukung.
+ * - MethodChannel [METHOD_CHANNEL] untuk izin, daftar tracker yang didukung,
+ *   dan menjaga layar tetap menyala selama pengukuran.
  * - EventChannel [HEART_RATE_CHANNEL] untuk detak jantung.
  * - EventChannel [SPO2_CHANNEL] untuk saturasi oksigen.
  * - EventChannel [ACCELEROMETER_CHANNEL] untuk akselerometer tiga sumbu.
@@ -70,6 +72,10 @@ class SamsungHealthBridge(
                 "hasPermission" -> result.success(hasPermission(sensor))
                 "requestPermission" -> requestPermission(sensor, result)
                 "supportedTrackers" -> result.success(connection.supportedTrackerNames())
+                "keepScreenOn" -> {
+                    setKeepScreenOn(call.argument<Boolean>("on") == true)
+                    result.success(null)
+                }
                 else -> result.notImplemented()
             }
         }
@@ -82,6 +88,15 @@ class SamsungHealthBridge(
         ppgChannel.setStreamHandler(null)
         methodChannel.setMethodCallHandler(null)
         connection.disconnect()
+    }
+
+    /**
+     * Selama pengukuran layar tidak mati sendiri. Tanpa izin khusus; bila
+     * aplikasi masuk latar belakang, sistem tetap boleh mematikan layar.
+     */
+    private fun setKeepScreenOn(on: Boolean) {
+        val flag = WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+        if (on) activity.window.addFlags(flag) else activity.window.clearFlags(flag)
     }
 
     /**

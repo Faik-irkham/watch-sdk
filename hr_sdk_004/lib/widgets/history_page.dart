@@ -23,6 +23,7 @@ class HistoryPage extends StatefulWidget {
     required this.load,
     this.totalNoun = 'data',
     this.accent = Colors.white,
+    this.itemNoun,
   });
 
   final String title;
@@ -34,12 +35,17 @@ class HistoryPage extends StatefulWidget {
   /// Warna sensor asal riwayat, untuk judul.
   final Color accent;
 
+  /// Kata benda untuk butir daftar bila butir itu ringkasan beberapa baris,
+  /// misalnya "sesi". Ringkasan jumlah lalu menyebut keduanya.
+  final String? itemNoun;
+
   static Future<void> open(
     BuildContext context, {
     required String title,
     required Future<History<HistoryEntry>> Function() load,
     String totalNoun = 'data',
     Color accent = Colors.white,
+    String? itemNoun,
   }) {
     return Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -48,6 +54,7 @@ class HistoryPage extends StatefulWidget {
           load: load,
           totalNoun: totalNoun,
           accent: accent,
+          itemNoun: itemNoun,
         ),
       ),
     );
@@ -107,6 +114,7 @@ class _HistoryPageState extends State<HistoryPage> {
               accent: widget.accent,
               history: history,
               totalNoun: widget.totalNoun,
+              itemNoun: widget.itemNoun,
             );
           },
         ),
@@ -121,17 +129,22 @@ class _HistoryList extends StatelessWidget {
     required this.accent,
     required this.history,
     required this.totalNoun,
+    this.itemNoun,
   });
 
   final String title;
   final Color accent;
   final History<HistoryEntry> history;
   final String totalNoun;
+  final String? itemNoun;
 
   @override
   Widget build(BuildContext context) {
     final shown = history.items.length;
-    final summary = shown < history.total
+    final noun = itemNoun;
+    final summary = noun != null
+        ? '$shown $noun · ${history.total} $totalNoun'
+        : shown < history.total
         ? '${history.total} $totalNoun · $shown terbaru'
         : '${history.total} $totalNoun';
 

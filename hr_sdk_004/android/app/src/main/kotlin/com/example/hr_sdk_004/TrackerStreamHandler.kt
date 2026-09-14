@@ -245,9 +245,11 @@ class Spo2StreamHandler(
 }
 
 /**
- * Akselerometer tiga sumbu. Nilainya bilangan bulat mentah dari sensor dan,
- * menurut dokumentasi resmi Samsung, tidak termasuk gravitasi. Konversi resmi
- * ke m/s²: nilai × 9,81 / (16383,75 / 4).
+ * Akselerometer tiga sumbu, bilangan bulat mentah dari sensor. Referensi API
+ * Samsung (ValueKey.AccelerometerSet) menyebut gravitasi tidak termasuk, tetapi
+ * pengukuran di Galaxy Watch4 (Wear OS 6, SDK 1.4.1) menunjukkan sebaliknya:
+ * jam diam dengan layar menghadap atas terbaca z ≈ +4096 (≈ 1 g). Konversi
+ * resmi ke m/s²: nilai × 9,81 / (16383,75 / 4).
  *
  * Datanya berlaju tinggi dan tiba berkelompok, jadi satu kiriman diteruskan
  * sebagai satu muatan berisi deret sampel.

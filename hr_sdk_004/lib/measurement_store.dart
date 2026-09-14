@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
+import 'heart_rate_summary.dart';
 import 'samsung_health_service.dart';
 
 /// Penyimpanan hasil pengukuran di SQLite lokal jam.
@@ -65,8 +66,9 @@ class MeasurementStore {
         bpm           INTEGER NOT NULL,
         accuracy_flag INTEGER NOT NULL
       )''');
-    // Nilai mentah tanpa gravitasi. Konversi resmi Samsung ke m/s²:
-    // nilai * 9.81 / (16383.75 / 4.0).
+    // Nilai mentah. Berbeda dari referensi API Samsung, pengukuran di Galaxy
+    // Watch4 menunjukkan gravitasi termasuk (≈ 4096 = 1 g saat diam). Konversi
+    // resmi Samsung ke m/s²: nilai * 9.81 / (16383.75 / 4.0).
     await db.execute('''
       CREATE TABLE accelerometer (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -172,18 +174,29 @@ class MeasurementStore {
   /// lebih, dan membatasi query menjaga halaman tetap cepat dibuka.
   static const int historyLimit = 100;
 
-  Future<History<HeartRateRecord>> heartRateHistory({int limit = historyLimit}) async {
+  /// Batas pembacaan detak jantung yang dimuat untuk riwayat: satu jam
+  /// pengukuran pada satu pembacaan per detik. Riwayat ini diringkas per sesi,
+  /// jadi butuh jauh lebih banyak baris dari [historyLimit].
+  static const int heartRateLimit = 3600;
+
+  /// Pembacaan detak jantung terbaru beserta IBI-nya, paling baru di depan.
+  Future<History<HeartRateBeat>> heartRateBeats({int limit = heartRateLimit}) async {
     final db = await database;
     final rows = await db.query(
       'heart_rate',
-      columns: ['measured_at', 'bpm'],
+      columns: ['measured_at', 'bpm', 'ibi_ms', 'ibi_status'],
       orderBy: 'measured_at DESC',
       limit: limit,
     );
     return History(
       [
         for (final r in rows)
-          HeartRateRecord(measuredAt: _time(r['measured_at']), bpm: _int(r['bpm'])),
+          HeartRateBeat(
+            at: _time(r['measured_at']),
+            bpm: _int(r['bpm']),
+            ibi: _jsonInts(r['ibi_ms']),
+            ibiStatus: _jsonInts(r['ibi_status']),
+          ),
       ],
       await _count(db, 'heart_rate'),
     );
@@ -285,8 +298,8 @@ class MeasurementStore {
 class History<T> {
   const History(this.items, this.total);
 
-  /// Baris terbaru, paling baru di depan, sebanyak-banyaknya
-  /// [MeasurementStore.historyLimit].
+  /// Baris terbaru, paling baru di depan, sebanyak-banyaknya batas pemuatan
+  /// (umumnya [MeasurementStore.historyLimit]).
   final List<T> items;
 
   /// Jumlah seluruh baris di tabel, bukan hanya yang dimuat di [items].
@@ -294,13 +307,6 @@ class History<T> {
 
   History<R> map<R>(R Function(T item) convert) =>
       History(items.map(convert).toList(growable: false), total);
-}
-
-class HeartRateRecord {
-  const HeartRateRecord({required this.measuredAt, required this.bpm});
-
-  final DateTime measuredAt;
-  final int bpm;
 }
 
 class Spo2Record {
@@ -350,6 +356,9 @@ class PpgSecond {
 }
 
 int _int(Object? value) => (value as num).toInt();
+
+List<int> _jsonInts(Object? value) =>
+    [for (final v in jsonDecode(value as String) as List) (v as num).toInt()];
 
 double? _doubleOrNull(Object? value) => (value as num?)?.toDouble();
 
