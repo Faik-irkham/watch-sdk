@@ -68,4 +68,23 @@ void main() {
     expect(find.text('Riwayat uji'), findsNothing);
     expect(find.text('buka'), findsOneWidget);
   });
+
+  testWidgets('kartu yang punya aksi diberi tanda panah dan bisa diketuk', (tester) async {
+    var tapped = 0;
+    await openHistory(
+      tester,
+      () async => History([
+        HistoryEntry(
+          at: DateTime(2026, 9, 11, 14, 5, 9),
+          value: '76 bpm · 73–87',
+          onTap: () => tapped++,
+        ),
+        HistoryEntry(at: DateTime(2026, 9, 11, 13, 0, 0), value: '98%'),
+      ], 2),
+    );
+
+    expect(find.byIcon(Icons.chevron_right), findsOneWidget);
+    await tester.tap(find.text('76 bpm · 73–87'));
+    expect(tapped, 1);
+  });
 }

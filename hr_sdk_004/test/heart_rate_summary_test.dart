@@ -88,6 +88,11 @@ void main() {
     expect(HeartRateSummary.of(const []), isNull);
   });
 
+  test('ringkasan menyimpan pembacaannya untuk rincian per detik', () {
+    final input = beats([800, 810, 820]);
+    expect(HeartRateSummary.of(input)!.beats, input);
+  });
+
   group('sesi', () {
     HeartRateBeat at(int seconds, int bpm) =>
         HeartRateBeat(at: DateTime.fromMillisecondsSinceEpoch(seconds * 1000), bpm: bpm);
@@ -125,6 +130,16 @@ void main() {
     test('lama sesi', () {
       expect(formatSessionDuration(const Duration(seconds: 45)), '45 dtk');
       expect(formatSessionDuration(const Duration(seconds: 185)), '3 mnt 5 dtk');
+    });
+
+    test('IBI per detik: nilai yang valid, lalu jumlah yang galat', () {
+      HeartRateBeat beat(List<int> ibi, List<int> status) =>
+          HeartRateBeat(at: DateTime(2026), bpm: 80, ibi: ibi, ibiStatus: status);
+
+      expect(formatIbi(beat([812, 790], [0, 0])), 'IBI 812, 790 ms');
+      expect(formatIbi(beat([606, 337], [-1, -1])), '2 IBI galat');
+      expect(formatIbi(beat([812, 606], [0, -1])), 'IBI 812 ms · 1 IBI galat');
+      expect(formatIbi(beat([], [])), 'tanpa IBI');
     });
   });
 }

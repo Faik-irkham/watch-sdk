@@ -4,11 +4,19 @@ import 'package:hr_sdk_004/measurement_store.dart';
 
 /// Satu baris di halaman riwayat, sudah dalam bentuk siap tampil.
 class HistoryEntry {
-  const HistoryEntry({required this.at, required this.value, this.detail});
+  const HistoryEntry({
+    required this.at,
+    required this.value,
+    this.detail,
+    this.onTap,
+  });
 
   final DateTime at;
   final String value;
   final String? detail;
+
+  /// Bila diisi, kartu bisa diketuk, misalnya untuk membuka rincian.
+  final VoidCallback? onTap;
 }
 
 /// Daftar riwayat satu tabel SQLite, terbaru di atas.
@@ -212,41 +220,62 @@ class _EntryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final detail = entry.detail;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
+    final value = Text(
+      entry.value,
+      textAlign: TextAlign.center,
+      style: const TextStyle(
+        fontSize: 15,
+        fontWeight: FontWeight.w600,
+        fontFeatures: [FontFeature.tabularFigures()],
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Material(
         color: const Color(0xFF1C1C1E),
         borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        children: [
-          Text(
-            formatHistoryTime(entry.at),
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 10,
-              color: Colors.white54,
-              fontFeatures: [FontFeature.tabularFigures()],
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: entry.onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Column(
+              children: [
+                Text(
+                  formatHistoryTime(entry.at),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: Colors.white54,
+                    fontFeatures: [FontFeature.tabularFigures()],
+                  ),
+                ),
+                const SizedBox(height: 1),
+                // Tanda panah menandai kartu yang bisa diketuk.
+                if (entry.onTap == null)
+                  value
+                else
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Flexible(child: value),
+                      const Icon(
+                        Icons.chevron_right,
+                        size: 16,
+                        color: Colors.white38,
+                      ),
+                    ],
+                  ),
+                if (detail != null)
+                  Text(
+                    detail,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 10, color: Colors.white54),
+                  ),
+              ],
             ),
           ),
-          const SizedBox(height: 1),
-          Text(
-            entry.value,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              fontFeatures: [FontFeature.tabularFigures()],
-            ),
-          ),
-          if (detail != null)
-            Text(
-              detail,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 10, color: Colors.white54),
-            ),
-        ],
+        ),
       ),
     );
   }

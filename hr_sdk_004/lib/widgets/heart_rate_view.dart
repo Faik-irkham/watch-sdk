@@ -111,9 +111,27 @@ class _HeartRateViewState extends State<HeartRateView>
               at: s.start,
               value: formatBpmRange(s),
               detail: '${formatHrv(s)} · ${formatSessionDuration(s.duration)}',
+              onTap: () => _openSession(s),
             ),
         ], beats.total);
       },
+    );
+  }
+
+  /// Rincian satu sesi: setiap pembacaan per detik beserta IBI-nya, urut waktu.
+  void _openSession(HeartRateSummary session) {
+    HistoryPage.open(
+      context,
+      accent: SensorColors.heartRate,
+      title: 'Rincian sesi',
+      load: () async => History([
+        for (final beat in session.beats)
+          HistoryEntry(
+            at: beat.at,
+            value: '${beat.bpm} bpm',
+            detail: formatIbi(beat),
+          ),
+      ], session.beats.length),
     );
   }
 
@@ -174,3 +192,21 @@ String formatSessionDuration(Duration duration) {
 /// Pesan setelah pengukuran dihentikan: rata-rata dan rentang, lalu HRV.
 String describeSession(HeartRateSummary s) =>
     'Rata-rata ${formatBpmRange(s)}\n${formatHrv(s)}';
+
+/// IBI satu pembacaan: nilai yang valid (status 0), lalu jumlah yang galat.
+String formatIbi(HeartRateBeat beat) {
+  final valid = <int>[];
+  var invalid = 0;
+  for (var i = 0; i < beat.ibi.length; i++) {
+    if (i < beat.ibiStatus.length && beat.ibiStatus[i] == 0) {
+      valid.add(beat.ibi[i]);
+    } else {
+      invalid++;
+    }
+  }
+  final parts = [
+    if (valid.isNotEmpty) 'IBI ${valid.join(', ')} ms',
+    if (invalid > 0) '$invalid IBI galat',
+  ];
+  return parts.isEmpty ? 'tanpa IBI' : parts.join(' · ');
+}

@@ -166,12 +166,13 @@ final pageScenarios = [
   ]),
 ];
 
-List<HistoryEntry> _entries(String value, [String? detail]) => [
+List<HistoryEntry> _entries(String value, [String? detail, VoidCallback? onTap]) => [
       for (var i = 0; i < 12; i++)
         HistoryEntry(
           at: DateTime(2026, 12, 31, 23, 59, 59 - i),
           value: value,
           detail: detail,
+          onTap: onTap,
         ),
     ];
 
@@ -180,7 +181,13 @@ final historyScenarios = <String, (String, String, History<HistoryEntry>)>{
     'Riwayat detak jantung',
     'data',
     // Format ringkasan sesi dengan nilai terlebar.
-    History(_entries('220 bpm · 220–220', 'HRV 999 ms · 59 mnt 59 dtk'), 90000),
+    History(_entries('220 bpm · 220–220', 'HRV 999 ms · 59 mnt 59 dtk', () {}), 90000),
+  ),
+  'rincian sesi detak jantung': (
+    'Rincian sesi',
+    'data',
+    // IBI terlebar: tiga nilai empat digit ditambah yang galat.
+    History(_entries('220 bpm', 'IBI 1999, 1999, 1999 ms · 3 IBI galat'), 3600),
   ),
   'riwayat SpO2': ('Riwayat SpO₂', 'data', History(_entries('100%', '220 bpm'), 9000)),
   'riwayat akselerometer': (

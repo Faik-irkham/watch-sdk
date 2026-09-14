@@ -32,6 +32,7 @@ class HeartRateSummary {
     required this.maxBpm,
     required this.meanBpm,
     required this.intervalPairs,
+    required this.beats,
     this.rmssd,
   });
 
@@ -60,6 +61,9 @@ class HeartRateSummary {
   /// HRV dalam milidetik: akar rata-rata kuadrat selisih IBI berurutan
   /// (RMSSD). Null bila [intervalPairs] kurang dari [minIntervalPairs].
   final double? rmssd;
+
+  /// Pembacaan sesi ini, urut waktu, untuk rincian per detik.
+  final List<HeartRateBeat> beats;
 
   Duration get duration => end.difference(start);
 
@@ -109,6 +113,7 @@ class HeartRateSummary {
       maxBpm: maxBpm,
       meanBpm: bpmSum / beats.length,
       intervalPairs: pairs,
+      beats: List.unmodifiable(beats),
       rmssd: pairs >= minIntervalPairs ? math.sqrt(squares / pairs) : null,
     );
   }
