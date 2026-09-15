@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:hr_sdk_005_phone/ble_receiver.dart';
 import 'package:hr_sdk_005_phone/edge_store.dart';
-import 'package:hr_sdk_005_phone/watch_receiver.dart';
+import 'package:hr_sdk_005_phone/watch_batch.dart';
 
 /// Layar utama HP (edge): sambungan BLE ke jam, nilai terbaru tiap sensor, dan
-/// kiriman yang baru diterima. Diperbarui setiap ada kiriman masuk.
+/// batch yang baru diterima. Diperbarui setiap ada batch masuk.
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key, required this.store, required this.receiver});
 
   final EdgeStore store;
-  final WatchReceiver receiver;
+  final BleReceiver receiver;
 
   @override
   State<DashboardPage> createState() => _DashboardPageState();
@@ -31,11 +32,14 @@ class _DashboardPageState extends State<DashboardPage> {
     super.dispose();
   }
 
-  /// Memuat ulang data, dan menyambung ulang BLE bila sedang tidak berjalan.
+  /// Memuat ulang data, dan mencari jam lagi selama belum tersambung. Pencarian
+  /// BLE berhenti sendiri setelah 20 detik (seperti proyek rujukan) tanpa
+  /// mengubah status "Mencari watch…", jadi status itu juga dimulai ulang.
   Future<void> _refresh() async {
-    final phase = widget.receiver.link.value.phase;
-    if (phase == LinkPhase.idle || phase == LinkPhase.error) {
-      await widget.receiver.connect();
+    final status = widget.receiver.status.value;
+    if (status != ReceiverStatus.connected &&
+        status != ReceiverStatus.connecting) {
+      await widget.receiver.start();
     }
     await _reload();
   }
@@ -74,10 +78,14 @@ class _DashboardPageState extends State<DashboardPage> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            ValueListenableBuilder<WatchLinkState>(
-              valueListenable: widget.receiver.link,
-              builder: (context, state, _) => _WatchCard(
-                state: state,
+            ListenableBuilder(
+              listenable: Listenable.merge([
+                widget.receiver.status,
+                widget.receiver.message,
+              ]),
+              builder: (context, _) => _WatchCard(
+                status: widget.receiver.status.value,
+                message: widget.receiver.message.value,
                 lastReceivedAt: _snapshot.lastReceivedAt,
               ),
             ),
@@ -97,14 +105,14 @@ class _DashboardPageState extends State<DashboardPage> {
                 latest: _snapshot.latest[table],
               ),
             const SizedBox(height: 16),
-            Text('Kiriman terbaru', style: theme.textTheme.titleMedium),
+            Text('Batch terbaru', style: theme.textTheme.titleMedium),
             const SizedBox(height: 4),
             ValueListenableBuilder<List<ReceivedBatch>>(
               valueListenable: widget.receiver.recent,
               builder: (context, batches, _) => batches.isEmpty
                   ? const Padding(
                       padding: EdgeInsets.symmetric(vertical: 8),
-                      child: Text('Belum ada kiriman sejak aplikasi dibuka'),
+                      child: Text('Belum ada batch sejak aplikasi dibuka'),
                     )
                   : Column(
                       children: [
@@ -119,57 +127,53 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 }
 
+/// Kartu status BLE, dengan label yang sama seperti StatusCard di proyek
+/// heart_rate_phone_receiver.
 class _WatchCard extends StatelessWidget {
-  const _WatchCard({required this.state, required this.lastReceivedAt});
+  const _WatchCard({
+    required this.status,
+    required this.message,
+    required this.lastReceivedAt,
+  });
 
-  final WatchLinkState state;
+  final ReceiverStatus status;
+  final String? message;
   final DateTime? lastReceivedAt;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final received = lastReceivedAt;
-    final name = state.name ?? 'jam';
-    final message = state.message;
-    final pending = state.pending;
-    final (title, icon, color) = switch (state.phase) {
-      LinkPhase.idle => (
-        'Jam belum tersambung',
-        Icons.bluetooth,
-        scheme.surfaceContainerHighest,
-      ),
-      LinkPhase.scanning => (
-        'Mencari jam…',
-        Icons.bluetooth_searching,
-        scheme.surfaceContainerHighest,
-      ),
-      LinkPhase.connecting => (
-        'Menyambung ke $name…',
-        Icons.bluetooth_searching,
-        scheme.surfaceContainerHighest,
-      ),
-      LinkPhase.connected => (
-        name,
+    final text = message;
+    final (label, icon, color) = switch (status) {
+      ReceiverStatus.connected => (
+        'Terhubung',
         Icons.bluetooth_connected,
         scheme.primaryContainer,
       ),
-      LinkPhase.disconnected => (
-        'Jam terputus, mencari lagi…',
+      ReceiverStatus.connecting => (
+        'Menghubungkan…',
         Icons.bluetooth_searching,
         scheme.surfaceContainerHighest,
       ),
-      LinkPhase.error => (
-        'Galat BLE',
-        Icons.bluetooth_disabled,
+      ReceiverStatus.scanning => (
+        'Mencari watch…',
+        Icons.bluetooth_searching,
+        scheme.surfaceContainerHighest,
+      ),
+      ReceiverStatus.error => (
+        'Error',
+        Icons.error_outline,
         scheme.errorContainer,
+      ),
+      ReceiverStatus.idle => (
+        'Belum terhubung',
+        Icons.bluetooth,
+        scheme.surfaceContainerHighest,
       ),
     };
     final lines = [
-      if (state.phase == LinkPhase.error && message != null) message,
-      if (state.phase == LinkPhase.connected)
-        pending == null
-            ? 'Tersambung lewat BLE'
-            : 'Tersambung lewat BLE · antrean di jam: $pending',
+      ?text,
       received == null
           ? 'Belum ada data diterima'
           : 'Terakhir menerima ${formatDateTime(received)}',
@@ -178,7 +182,7 @@ class _WatchCard extends StatelessWidget {
       color: color,
       child: ListTile(
         leading: Icon(icon),
-        title: Text(title),
+        title: Text(label),
         subtitle: Text(lines.join('\n')),
         isThreeLine: lines.length > 1,
       ),

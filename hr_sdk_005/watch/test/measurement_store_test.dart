@@ -218,6 +218,12 @@ void main() {
       await expectLater(store.pendingRows('ppg'), throwsArgumentError);
     });
   });
+
+  test('identitas jam dibuat sekali lalu dipakai ulang', () async {
+    final id = await store.deviceId();
+    expect(id, matches(RegExp(r'^[0-9a-f]{32}$')));
+    expect(await store.deviceId(), id);
+  });
 }
 
 /// Gagal pada pembukaan pertama, lalu meneruskan ke pabrik yang sebenarnya.

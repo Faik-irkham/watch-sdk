@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
@@ -21,7 +22,11 @@ class MeasurementStore {
   static const String fileName = 'measurements.db';
 
   /// Tabel yang dikirim ke HP. PPG tidak ikut karena datanya terlalu besar.
-  static const List<String> syncTables = ['heart_rate', 'spo2', 'accelerometer'];
+  static const List<String> syncTables = [
+    'heart_rate',
+    'spo2',
+    'accelerometer',
+  ];
 
   /// Null berarti pabrik bawaan sqflite, yang baru disentuh saat basis data
   /// dibuka pertama kali. Membangun halaman tidak menyentuh platform.
@@ -31,6 +36,7 @@ class MeasurementStore {
   final String? path;
 
   Future<Database>? _db;
+  String? _deviceId;
 
   /// Kegagalan membuka tidak disimpan: panggilan berikutnya mencoba lagi,
   /// alih-alih mengulang galat yang sama sampai aplikasi dimulai ulang.
@@ -102,6 +108,10 @@ class MeasurementStore {
         table_name TEXT    PRIMARY KEY,
         last_id    INTEGER NOT NULL
       )''');
+    // Identitas jam (device_id), sama seperti tabel meta di proyek rujukan.
+    await db.execute(
+      'CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
+    );
   }
 
   /// Menyimpan satu pembacaan detak jantung. Mengembalikan jumlah baris yang
@@ -109,16 +119,12 @@ class MeasurementStore {
   Future<int> saveHeartRate(HeartRateSample sample) async {
     if (!sample.isValid) return 0;
     final db = await database;
-    final id = await db.insert(
-      'heart_rate',
-      {
-        'measured_at': sample.timestamp.millisecondsSinceEpoch,
-        'bpm': sample.heartRate,
-        'ibi_ms': jsonEncode(sample.ibi),
-        'ibi_status': jsonEncode(sample.ibiStatus),
-      },
-      conflictAlgorithm: ConflictAlgorithm.ignore,
-    );
+    final id = await db.insert('heart_rate', {
+      'measured_at': sample.timestamp.millisecondsSinceEpoch,
+      'bpm': sample.heartRate,
+      'ibi_ms': jsonEncode(sample.ibi),
+      'ibi_status': jsonEncode(sample.ibiStatus),
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
     return id > 0 ? 1 : 0;
   }
 
@@ -127,16 +133,12 @@ class MeasurementStore {
   Future<int> saveSpo2(Spo2Sample sample) async {
     if (!sample.isComplete) return 0;
     final db = await database;
-    final id = await db.insert(
-      'spo2',
-      {
-        'measured_at': sample.timestamp.millisecondsSinceEpoch,
-        'spo2_percent': sample.spo2,
-        'bpm': sample.heartRate,
-        'accuracy_flag': sample.accuracyFlag,
-      },
-      conflictAlgorithm: ConflictAlgorithm.ignore,
-    );
+    final id = await db.insert('spo2', {
+      'measured_at': sample.timestamp.millisecondsSinceEpoch,
+      'spo2_percent': sample.spo2,
+      'bpm': sample.heartRate,
+      'accuracy_flag': sample.accuracyFlag,
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
     return id > 0 ? 1 : 0;
   }
 
@@ -191,7 +193,9 @@ class MeasurementStore {
   static const int heartRateLimit = 3600;
 
   /// Pembacaan detak jantung terbaru beserta IBI-nya, paling baru di depan.
-  Future<History<HeartRateBeat>> heartRateBeats({int limit = heartRateLimit}) async {
+  Future<History<HeartRateBeat>> heartRateBeats({
+    int limit = heartRateLimit,
+  }) async {
     final db = await database;
     final rows = await db.query(
       'heart_rate',
@@ -199,18 +203,15 @@ class MeasurementStore {
       orderBy: 'measured_at DESC',
       limit: limit,
     );
-    return History(
-      [
-        for (final r in rows)
-          HeartRateBeat(
-            at: _time(r['measured_at']),
-            bpm: _int(r['bpm']),
-            ibi: _jsonInts(r['ibi_ms']),
-            ibiStatus: _jsonInts(r['ibi_status']),
-          ),
-      ],
-      await _count(db, 'heart_rate'),
-    );
+    return History([
+      for (final r in rows)
+        HeartRateBeat(
+          at: _time(r['measured_at']),
+          bpm: _int(r['bpm']),
+          ibi: _jsonInts(r['ibi_ms']),
+          ibiStatus: _jsonInts(r['ibi_status']),
+        ),
+    ], await _count(db, 'heart_rate'));
   }
 
   Future<History<Spo2Record>> spo2History({int limit = historyLimit}) async {
@@ -221,17 +222,14 @@ class MeasurementStore {
       orderBy: 'measured_at DESC',
       limit: limit,
     );
-    return History(
-      [
-        for (final r in rows)
-          Spo2Record(
-            measuredAt: _time(r['measured_at']),
-            spo2Percent: _int(r['spo2_percent']),
-            bpm: _int(r['bpm']),
-          ),
-      ],
-      await _count(db, 'spo2'),
-    );
+    return History([
+      for (final r in rows)
+        Spo2Record(
+          measuredAt: _time(r['measured_at']),
+          spo2Percent: _int(r['spo2_percent']),
+          bpm: _int(r['bpm']),
+        ),
+    ], await _count(db, 'spo2'));
   }
 
   /// Riwayat akselerometer diringkas per detik: tabel mentahnya berisi sekitar
@@ -241,7 +239,8 @@ class MeasurementStore {
     int limit = historyLimit,
   }) async {
     final db = await database;
-    final rows = await db.rawQuery('''
+    final rows = await db.rawQuery(
+      '''
       SELECT measured_at / 1000 AS second,
              COUNT(*) AS samples,
              AVG(x)   AS mean_x,
@@ -250,27 +249,27 @@ class MeasurementStore {
       FROM accelerometer
       GROUP BY second
       ORDER BY second DESC
-      LIMIT ?''', [limit]);
-    return History(
-      [
-        for (final r in rows)
-          AccelerometerSecond(
-            second: _time(_int(r['second']) * 1000),
-            samples: _int(r['samples']),
-            meanX: (r['mean_x'] as num).toDouble(),
-            meanY: (r['mean_y'] as num).toDouble(),
-            meanZ: (r['mean_z'] as num).toDouble(),
-          ),
-      ],
-      await _count(db, 'accelerometer'),
+      LIMIT ?''',
+      [limit],
     );
+    return History([
+      for (final r in rows)
+        AccelerometerSecond(
+          second: _time(_int(r['second']) * 1000),
+          samples: _int(r['samples']),
+          meanX: (r['mean_x'] as num).toDouble(),
+          meanY: (r['mean_y'] as num).toDouble(),
+          meanZ: (r['mean_z'] as num).toDouble(),
+        ),
+    ], await _count(db, 'accelerometer'));
   }
 
   /// Riwayat PPG diringkas per detik, seperti akselerometer. Rata-rata warna
   /// yang tidak dilacak tetap null.
   Future<History<PpgSecond>> ppgHistory({int limit = historyLimit}) async {
     final db = await database;
-    final rows = await db.rawQuery('''
+    final rows = await db.rawQuery(
+      '''
       SELECT measured_at / 1000 AS second,
              COUNT(*)   AS samples,
              AVG(green) AS mean_green,
@@ -279,24 +278,49 @@ class MeasurementStore {
       FROM ppg
       GROUP BY second
       ORDER BY second DESC
-      LIMIT ?''', [limit]);
-    return History(
-      [
-        for (final r in rows)
-          PpgSecond(
-            second: _time(_int(r['second']) * 1000),
-            samples: _int(r['samples']),
-            meanGreen: _doubleOrNull(r['mean_green']),
-            meanIr: _doubleOrNull(r['mean_ir']),
-            meanRed: _doubleOrNull(r['mean_red']),
-          ),
-      ],
-      await _count(db, 'ppg'),
+      LIMIT ?''',
+      [limit],
     );
+    return History([
+      for (final r in rows)
+        PpgSecond(
+          second: _time(_int(r['second']) * 1000),
+          samples: _int(r['samples']),
+          meanGreen: _doubleOrNull(r['mean_green']),
+          meanIr: _doubleOrNull(r['mean_ir']),
+          meanRed: _doubleOrNull(r['mean_red']),
+        ),
+    ], await _count(db, 'ppg'));
+  }
+
+  /// Identitas jam, dibuat sekali lalu disimpan permanen, seperti di proyek
+  /// basic_sensor_heart_rate_interval_sqflite_ble. Dikirim bersama tiap batch
+  /// sehingga HP memakai pasangan `(device_id, id)` sebagai identitas baris.
+  Future<String> deviceId() async {
+    final cached = _deviceId;
+    if (cached != null) return cached;
+    final db = await database;
+    final rows = await db.query(
+      'meta',
+      where: 'key = ?',
+      whereArgs: ['device_id'],
+      limit: 1,
+    );
+    if (rows.isNotEmpty) return _deviceId = rows.first['value']! as String;
+    final random = Random.secure();
+    final id = List.generate(
+      16,
+      (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join();
+    await db.insert('meta', {'key': 'device_id', 'value': id});
+    return _deviceId = id;
   }
 
   /// Baris yang belum diterima HP, urut id, sebanyak-banyaknya [limit].
-  Future<List<Map<String, Object?>>> pendingRows(String table, {int limit = 250}) async {
+  Future<List<Map<String, Object?>>> pendingRows(
+    String table, {
+    int limit = 250,
+  }) async {
     _checkSyncTable(table);
     final db = await database;
     return db.query(
@@ -322,27 +346,34 @@ class MeasurementStore {
   Future<void> markSynced(String table, int lastId) async {
     _checkSyncTable(table);
     final db = await database;
-    await db.insert(
-      'sync_state',
-      {'table_name': table, 'last_id': lastId},
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await db.insert('sync_state', {
+      'table_name': table,
+      'last_id': lastId,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   static Future<int> _lastSyncedId(Database db, String table) async =>
       Sqflite.firstIntValue(
-        await db.rawQuery('SELECT last_id FROM sync_state WHERE table_name = ?', [table]),
+        await db.rawQuery(
+          'SELECT last_id FROM sync_state WHERE table_name = ?',
+          [table],
+        ),
       ) ??
       0;
 
   static void _checkSyncTable(String table) {
     if (!syncTables.contains(table)) {
-      throw ArgumentError.value(table, 'table', 'bukan tabel yang dikirim ke HP');
+      throw ArgumentError.value(
+        table,
+        'table',
+        'bukan tabel yang dikirim ke HP',
+      );
     }
   }
 
   static Future<int> _count(Database db, String table) async =>
-      Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM $table')) ?? 0;
+      Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM $table')) ??
+      0;
 
   Future<void> close() async {
     final db = _db;
@@ -414,11 +445,11 @@ class PpgSecond {
 
 int _int(Object? value) => (value as num).toInt();
 
-List<int> _jsonInts(Object? value) =>
-    [for (final v in jsonDecode(value as String) as List) (v as num).toInt()];
+List<int> _jsonInts(Object? value) => [
+  for (final v in jsonDecode(value as String) as List) (v as num).toInt(),
+];
 
 double? _doubleOrNull(Object? value) => (value as num?)?.toDouble();
 
 DateTime _time(Object? millis) =>
     DateTime.fromMillisecondsSinceEpoch((millis as num).toInt());
-

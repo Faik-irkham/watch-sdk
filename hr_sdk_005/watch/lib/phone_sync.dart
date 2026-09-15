@@ -1,18 +1,10 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:hr_sdk_005_watch/ble_peripheral.dart';
 import 'package:hr_sdk_005_watch/measurement_store.dart';
 import 'package:hr_sdk_005_watch/phone_link.dart';
-
-/// Versi format kiriman; aplikasi HP menolak versi yang tidak dikenalnya.
-const int batchVersion = 1;
-
-/// Satu kiriman ke HP: nama tabel dan baris-barisnya apa adanya dari SQLite,
-/// termasuk kolom `id` yang dipakai HP untuk mengabaikan kiriman ulang.
-String encodeBatch(String table, List<Map<String, Object?>> rows) =>
-    jsonEncode({'v': batchVersion, 'table': table, 'rows': rows});
 
 /// Keadaan pengiriman ke HP, untuk halaman "Kirim ke HP".
 @immutable
@@ -29,7 +21,7 @@ class SyncStatus {
   /// Jumlah baris yang belum diterima HP, per tabel.
   final Map<String, int> pending;
 
-  /// Nama HP yang tersambung; null bila belum ada.
+  /// Alamat atau nama HP yang tersambung; null bila belum ada.
   final String? phoneName;
   final bool sending;
   final DateTime? lastSentAt;
@@ -41,11 +33,12 @@ class SyncStatus {
 
 /// Mengirim data yang tersimpan di jam ke HP (edge), dengan antrean di SQLite.
 ///
-/// Jalurnya BLE: jam menjadi GATT server, HP tersambung sebagai central.
-/// Notifikasi BLE tidak dikonfirmasi penerimanya, jadi setiap kelompok baris
-/// baru ditandai terkirim setelah HP menulis ACK, yaitu setelah kelompok itu
-/// tersimpan di HP. Kelompok yang gagal dikirim ulang pada putaran berikutnya,
-/// dan HP mengabaikan baris yang sudah pernah diterimanya.
+/// Jalur BLE-nya sama dengan proyek basic_sensor_heart_rate_interval_sqflite_ble
+/// (lihat [BlePeripheral]): setiap kelompok baris dikirim sebagai satu batch,
+/// lalu jam menunggu ACK dengan `batch_id` yang sama dari HP. Hanya batch yang
+/// dikonfirmasi `ok` yang memajukan penanda antrean; sisanya dikirim ulang
+/// pada putaran berikutnya, dan HP mengabaikan baris yang sudah pernah
+/// diterimanya.
 class PhoneSync {
   PhoneSync({MeasurementStore? store, PhoneLink? link})
     : store = store ?? MeasurementStore.instance,
@@ -53,7 +46,7 @@ class PhoneSync {
 
   static final PhoneSync instance = PhoneSync();
 
-  /// Baris per kiriman: sekitar 10 detik akselerometer, jadi pesan tetap kecil.
+  /// Baris per batch: sekitar 10 detik akselerometer, jadi batch tetap kecil.
   static const int batchSize = 250;
 
   /// Jeda antarputaran otomatis selama aplikasi terbuka.
@@ -65,25 +58,29 @@ class PhoneSync {
 
   Timer? _timer;
   bool _busy = false;
+  bool _listening = false;
+  BleStatus _lastStatus = BleStatus.idle;
 
-  /// Galat saat menyalakan BLE di jam; ditampilkan selama belum teratasi.
+  /// Galat BLE di jam; ditampilkan selama belum teratasi.
   String? _linkError;
 
-  /// Menyalakan iklan BLE dan pengiriman berkala. HP yang baru tersambung
-  /// menulis START, dan jam langsung mengirim tanpa menunggu putaran berikutnya.
+  /// Menyalakan iklan BLE dan pengiriman berkala.
   void start() {
     _timer ??= Timer.periodic(period, (_) => sync());
-    link.listen(
-      onPhoneReady: sync,
-      onError: (message) => _emit(error: _linkError = message),
-    );
+    if (!_listening) {
+      link.status.addListener(_onLinkChanged);
+      _listening = true;
+    }
     unawaited(_startLink());
   }
 
   void stop() {
     _timer?.cancel();
     _timer = null;
-    link.listen();
+    if (_listening) {
+      link.status.removeListener(_onLinkChanged);
+      _listening = false;
+    }
     unawaited(
       link.stop().catchError((Object error) {
         debugPrint('Gagal menghentikan BLE: $error');
@@ -100,14 +97,44 @@ class PhoneSync {
     }
   }
 
-  /// Memperbarui jumlah antrean dan HP yang tersambung, tanpa mengirim.
+  /// Seperti proyek rujukan: begitu HP tersambung kembali, antrean dikirim
+  /// tanpa menunggu putaran berikutnya.
+  void _onLinkChanged() {
+    final now = link.status.value;
+    final reconnected =
+        now == BleStatus.connected && _lastStatus != BleStatus.connected;
+    _lastStatus = now;
+    _showLink();
+    if (reconnected) unawaited(sync());
+  }
+
+  /// Menampilkan keadaan BLE terkini tanpa mengirim.
+  void _showLink() {
+    switch (link.status.value) {
+      case BleStatus.connected:
+        _emit(phoneName: link.message.value ?? 'HP', clearError: true);
+      case BleStatus.error:
+        _emit(
+          clearPhone: true,
+          error: _linkError = link.message.value ?? 'BLE error',
+        );
+      case BleStatus.advertising:
+        _linkError = null;
+        _emit(clearPhone: true, clearError: true);
+      case BleStatus.idle:
+        _emit(clearPhone: true);
+    }
+  }
+
+  /// Memperbarui keadaan BLE dan jumlah antrean, tanpa mengirim.
   Future<void> refresh() async {
-    await _checkPhone();
+    _showLink();
     await _refreshPending();
   }
 
   /// Mengirim semua baris yang belum diterima HP, tabel demi tabel, per
-  /// kelompok [batchSize] baris. Berhenti di kelompok pertama yang gagal.
+  /// kelompok [batchSize] baris. Berhenti di batch pertama yang tidak
+  /// dikonfirmasi.
   ///
   /// [manual] (tombol Kirim) juga mencoba lagi menyalakan BLE bila sebelumnya
   /// gagal, misalnya setelah Bluetooth dinyalakan atau izinnya diberikan.
@@ -117,15 +144,23 @@ class PhoneSync {
     _busy = true;
     _emit(sending: true);
     try {
-      final phone = await _checkPhone();
-      if (phone == null) return;
+      _showLink();
+      if (link.status.value != BleStatus.connected) {
+        _emit(
+          clearPhone: true,
+          error: _linkError ?? 'HP belum tersambung lewat BLE',
+        );
+        return;
+      }
+      final deviceId = await store.deviceId();
       var sent = 0;
       for (final table in MeasurementStore.syncTables) {
         while (true) {
           final rows = await store.pendingRows(table, limit: batchSize);
           if (rows.isEmpty) break;
-          if (!await link.sendBatch(encodeBatch(table, rows))) {
-            _emit(error: 'HP menolak kiriman; dicoba lagi nanti');
+          final ack = await link.send(table, rows, deviceId: deviceId);
+          if (!ack.ok) {
+            _emit(error: describeAck(ack));
             return;
           }
           await store.markSynced(table, rows.last['id']! as int);
@@ -133,6 +168,7 @@ class PhoneSync {
           await _refreshPending();
         }
       }
+      _emit(clearError: true);
       if (sent > 0) _emit(lastSentAt: DateTime.now(), lastSentRows: sent);
     } catch (error) {
       _emit(error: describeSyncError(error));
@@ -140,24 +176,6 @@ class PhoneSync {
       await _refreshPending();
       _busy = false;
       _emit(sending: false);
-    }
-  }
-
-  Future<PhoneNode?> _checkPhone() async {
-    try {
-      final phone = await link.connectedPhone();
-      if (phone == null) {
-        _emit(
-          clearPhone: true,
-          error: _linkError ?? 'HP belum tersambung lewat BLE',
-        );
-      } else {
-        _emit(phoneName: phone.name, clearError: true);
-      }
-      return phone;
-    } catch (error) {
-      _emit(clearPhone: true, error: describeSyncError(error));
-      return null;
     }
   }
 
@@ -169,8 +187,6 @@ class PhoneSync {
             table: await store.pendingCount(table),
         },
       );
-      // Dibaca HP lewat characteristic STATUS.
-      await link.setPending(status.value.totalPending);
     } catch (error) {
       debugPrint('Gagal membaca antrean kirim: $error');
     }
@@ -197,6 +213,13 @@ class PhoneSync {
     );
   }
 }
+
+/// Keterangan batch yang tidak dikonfirmasi, menurut status ACK dari HP.
+String describeAck(BatchAckResult ack) => switch (ack.status) {
+  'timeout' => 'HP tidak membalas kiriman; dicoba lagi nanti',
+  'not_sent' => 'Kiriman tidak dapat dikirim; dicoba lagi nanti',
+  _ => 'HP menolak kiriman (${ack.status}); dicoba lagi nanti',
+};
 
 String describeSyncError(Object error) => error is PlatformException
     ? (error.message ?? error.code)

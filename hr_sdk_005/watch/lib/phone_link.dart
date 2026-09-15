@@ -1,62 +1,42 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:hr_sdk_005_watch/ble_peripheral.dart';
+import 'package:permission_handler/permission_handler.dart';
 
-/// HP yang tersambung ke jam lewat BLE.
-class PhoneNode {
-  const PhoneNode({required this.id, required this.name});
-
-  /// Alamat Bluetooth HP.
-  final String id;
-  final String name;
-}
-
-/// Kanal ke BleServer.kt: jam sebagai peripheral BLE (GATT server).
+/// Penghubung PhoneSync ke [BlePeripheral], dipisah agar PhoneSync bisa diuji
+/// dengan HP palsu tanpa Bluetooth sungguhan.
 class PhoneLink {
   const PhoneLink();
 
-  static const MethodChannel _channel = MethodChannel('edge/phone');
+  BlePeripheral get _ble => BlePeripheral.instance;
 
-  /// Menyalakan GATT server dan iklan BLE. Melempar [PlatformException] bila
-  /// Bluetooth mati, izin ditolak, atau jam tidak mendukung BLE advertising.
-  Future<void> start() => _channel.invokeMethod<void>('start');
+  ValueListenable<BleStatus> get status => _ble.status;
 
-  Future<void> stop() => _channel.invokeMethod<void>('stop');
+  /// Alamat HP saat tersambung, atau pesan galat dari sisi native.
+  ValueListenable<String?> get message => _ble.message;
 
-  /// HP yang sudah menyalakan notifikasi DATA, atau null bila belum ada.
-  Future<PhoneNode?> connectedPhone() async {
-    final node = await _channel.invokeMapMethod<String, Object?>(
-      'connectedPhone',
-    );
-    if (node == null) return null;
-    return PhoneNode(id: node['id']! as String, name: node['name']! as String);
-  }
-
-  /// Mengirim satu kiriman JSON lewat notifikasi DATA. True bila HP membalas
-  /// ACK (sudah disimpan), false bila HP meminta kirim ulang (RETRY).
-  Future<bool> sendBatch(String json) async =>
-      await _channel.invokeMethod<bool>('sendBatch', json) ?? false;
-
-  /// Jumlah antrean yang dibaca HP lewat characteristic STATUS.
-  Future<void> setPending(int pending) =>
-      _channel.invokeMethod<void>('setPending', pending);
-
-  /// Kabar dari BleServer.kt: HP menulis START (siap menerima), atau iklan BLE
-  /// gagal. Tanpa argumen berarti berhenti mendengarkan.
-  void listen({
-    void Function()? onPhoneReady,
-    void Function(String message)? onError,
-  }) {
-    if (onPhoneReady == null && onError == null) {
-      _channel.setMethodCallHandler(null);
-      return;
+  /// Minta izin Bluetooth, seperti MonitoringCubit di proyek rujukan, lalu
+  /// mulai beriklan.
+  Future<void> start() async {
+    final statuses = await [
+      Permission.bluetoothAdvertise,
+      Permission.bluetoothConnect,
+    ].request();
+    if (!statuses.values.every((s) => s.isGranted)) {
+      throw PlatformException(
+        code: 'PERMISSION_DENIED',
+        message: 'Izin Bluetooth ditolak',
+      );
     }
-    _channel.setMethodCallHandler((call) async {
-      switch (call.method) {
-        case 'phoneReady':
-          onPhoneReady?.call();
-        case 'linkError':
-          onError?.call(call.arguments as String);
-      }
-      return null;
-    });
+    await _ble.start();
   }
+
+  Future<void> stop() => _ble.stop();
+
+  /// Kirim satu batch dan tunggu ACK yang cocok dari HP.
+  Future<BatchAckResult> send(
+    String table,
+    List<Map<String, Object?>> rows, {
+    required String deviceId,
+  }) => _ble.sendBatchAndAwaitAck(table, rows, deviceId: deviceId);
 }

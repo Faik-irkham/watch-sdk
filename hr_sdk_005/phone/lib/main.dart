@@ -1,17 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:hr_sdk_005_phone/ble_receiver.dart';
 import 'package:hr_sdk_005_phone/dashboard_page.dart';
 import 'package:hr_sdk_005_phone/edge_store.dart';
-import 'package:hr_sdk_005_phone/watch_receiver.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  // Penerima dipasang sebelum layar dibangun, supaya kiriman dari jam yang
-  // datang saat aplikasi baru dibuka langsung tertangani.
-  final receiver = WatchReceiver()..attach();
+  final receiver = BleReceiver.instance;
   // Mulai mencari jam lewat BLE; izin Bluetooth diminta di sini bila perlu.
-  unawaited(receiver.connect());
+  unawaited(receiver.start());
   runApp(EdgeApp(store: EdgeStore.instance, receiver: receiver));
 }
 
@@ -20,7 +18,7 @@ class EdgeApp extends StatelessWidget {
   const EdgeApp({super.key, required this.store, required this.receiver});
 
   final EdgeStore store;
-  final WatchReceiver receiver;
+  final BleReceiver receiver;
 
   @override
   Widget build(BuildContext context) {

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hr_sdk_005_phone/ble_receiver.dart';
 import 'package:hr_sdk_005_phone/dashboard_page.dart';
 import 'package:hr_sdk_005_phone/edge_store.dart';
-import 'package:hr_sdk_005_phone/watch_receiver.dart';
 
 /// Penyimpanan palsu tanpa berkas, supaya test widget tidak menunggu I/O
 /// sungguhan yang tidak berjalan di waktu palsu test.
@@ -18,10 +18,13 @@ class FakeStore extends EdgeStore {
 Future<void> showDashboard(
   WidgetTester tester,
   EdgeSnapshot snapshot, {
-  WatchLinkState link = const WatchLinkState(),
+  ReceiverStatus status = ReceiverStatus.idle,
+  String? message,
 }) async {
   final store = FakeStore(snapshot);
-  final receiver = WatchReceiver(store: store)..link.value = link;
+  final receiver = BleReceiver.forTest(store)
+    ..status.value = status
+    ..message.value = message;
   await tester.pumpWidget(
     MaterialApp(
       home: DashboardPage(store: store, receiver: receiver),
@@ -45,44 +48,36 @@ void main() {
         },
         lastReceivedAt: DateTime(2026, 9, 15, 14, 5, 9),
       ),
-      link: const WatchLinkState(
-        phase: LinkPhase.connected,
-        name: 'Galaxy Watch4',
-        pending: 12,
-      ),
+      status: ReceiverStatus.connected,
+      message: 'Galaxy Watch4',
     );
 
-    expect(find.text('Galaxy Watch4'), findsOneWidget);
-    expect(find.textContaining('antrean di jam: 12'), findsOneWidget);
+    expect(find.text('Terhubung'), findsOneWidget);
+    expect(find.textContaining('Galaxy Watch4'), findsOneWidget);
     expect(find.text('76 bpm'), findsOneWidget);
     expect(find.text('98%'), findsOneWidget);
     expect(find.text('x 12 · y -50 · z 4080'), findsOneWidget);
     expect(find.textContaining('1234 data'), findsOneWidget);
-    expect(
-      find.text('Belum ada kiriman sejak aplikasi dibuka'),
-      findsOneWidget,
-    );
+    expect(find.text('Belum ada batch sejak aplikasi dibuka'), findsOneWidget);
   });
 
-  testWidgets('jam belum tersambung dan belum ada data', (tester) async {
+  testWidgets('jam belum terhubung dan belum ada data', (tester) async {
     await showDashboard(tester, const EdgeSnapshot());
 
-    expect(find.text('Jam belum tersambung'), findsOneWidget);
+    expect(find.text('Belum terhubung'), findsOneWidget);
     expect(find.text('Belum ada data diterima'), findsOneWidget);
     expect(find.text('--'), findsNWidgets(3));
   });
 
-  testWidgets('galat BLE ditampilkan dengan pesannya', (tester) async {
+  testWidgets('error BLE ditampilkan dengan pesannya', (tester) async {
     await showDashboard(
       tester,
       const EdgeSnapshot(),
-      link: const WatchLinkState(
-        phase: LinkPhase.error,
-        message: 'Izin Bluetooth ditolak',
-      ),
+      status: ReceiverStatus.error,
+      message: 'Izin Bluetooth ditolak',
     );
 
-    expect(find.text('Galat BLE'), findsOneWidget);
+    expect(find.text('Error'), findsOneWidget);
     expect(find.textContaining('Izin Bluetooth ditolak'), findsOneWidget);
   });
 }

@@ -3,9 +3,10 @@ import 'package:sqflite/sqflite.dart';
 
 /// Penyimpanan di HP (edge): salinan data yang diterima dari jam.
 ///
-/// Setiap baris membawa `watch_id`, yaitu id barisnya di jam. Kolom itu unik,
-/// jadi kiriman yang diulang (misalnya karena balasan sebelumnya tidak sampai
-/// ke jam) tidak menggandakan data.
+/// Setiap baris membawa `device_id` (identitas jam) dan `watch_id` (id barisnya
+/// di jam). Pasangan itu unik, sama seperti `(device_id, record_id)` di proyek
+/// heart_rate_phone_receiver, jadi batch yang dikirim ulang (misalnya karena
+/// ACK sebelumnya tidak sampai ke jam) tidak menggandakan data.
 class EdgeStore {
   EdgeStore({this.factory, this.path});
 
@@ -13,7 +14,8 @@ class EdgeStore {
 
   static const String fileName = 'edge.db';
 
-  /// Kolom data tiap tabel yang diterima dari jam, selain `watch_id`.
+  /// Kolom data tiap tabel yang diterima dari jam, selain `device_id` dan
+  /// `watch_id`.
   static const Map<String, List<String>> columns = {
     'heart_rate': ['measured_at', 'bpm', 'ibi_ms', 'ibi_status'],
     'spo2': ['measured_at', 'spo2_percent', 'bpm', 'accuracy_flag'],
@@ -48,7 +50,8 @@ class EdgeStore {
     await db.execute('''
       CREATE TABLE heart_rate (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        watch_id    INTEGER NOT NULL UNIQUE,
+        device_id   TEXT    NOT NULL,
+        watch_id    INTEGER NOT NULL,
         measured_at INTEGER NOT NULL,
         bpm         INTEGER NOT NULL,
         ibi_ms      TEXT    NOT NULL,
@@ -58,7 +61,8 @@ class EdgeStore {
     await db.execute('''
       CREATE TABLE spo2 (
         id            INTEGER PRIMARY KEY AUTOINCREMENT,
-        watch_id      INTEGER NOT NULL UNIQUE,
+        device_id     TEXT    NOT NULL,
+        watch_id      INTEGER NOT NULL,
         measured_at   INTEGER NOT NULL,
         spo2_percent  INTEGER NOT NULL,
         bpm           INTEGER NOT NULL,
@@ -68,7 +72,8 @@ class EdgeStore {
     await db.execute('''
       CREATE TABLE accelerometer (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        watch_id    INTEGER NOT NULL UNIQUE,
+        device_id   TEXT    NOT NULL,
+        watch_id    INTEGER NOT NULL,
         measured_at INTEGER NOT NULL,
         x           INTEGER NOT NULL,
         y           INTEGER NOT NULL,
@@ -78,6 +83,12 @@ class EdgeStore {
     await db.execute(
       'CREATE INDEX accelerometer_measured_at ON accelerometer (measured_at)',
     );
+    // Identitas record dari jam mencegah duplikat saat batch dikirim ulang.
+    for (final table in columns.keys) {
+      await db.execute(
+        'CREATE UNIQUE INDEX ${table}_record ON $table (device_id, watch_id)',
+      );
+    }
   }
 
   /// Menyimpan satu kiriman dalam satu transaksi dan mengembalikan jumlah
@@ -87,11 +98,15 @@ class EdgeStore {
   Future<int> insertBatch(
     String table,
     List<Map<String, Object?>> rows, {
+    required String deviceId,
     DateTime? receivedAt,
   }) async {
     final names = columns[table];
     if (names == null) {
       throw ArgumentError.value(table, 'table', 'tabel tidak dikenal');
+    }
+    if (deviceId.isEmpty) {
+      throw const FormatException('Batch tanpa identitas jam');
     }
     // Diperiksa sendiri: INSERT OR IGNORE juga melewati pelanggaran NOT NULL
     // tanpa galat, sehingga baris tidak lengkap akan hilang diam-diam.
@@ -112,6 +127,7 @@ class EdgeStore {
     await db.transaction((txn) async {
       for (final row in rows) {
         final values = <String, Object?>{
+          'device_id': deviceId,
           'watch_id': row['id'],
           'received_at': at,
         };
