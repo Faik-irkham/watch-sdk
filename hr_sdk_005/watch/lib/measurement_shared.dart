@@ -3,8 +3,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:hr_sdk_004/measurement_store.dart';
-import 'package:hr_sdk_004/samsung_health_service.dart';
+import 'package:hr_sdk_005_watch/measurement_store.dart';
+import 'package:hr_sdk_005_watch/samsung_health_service.dart';
 
 /// Warna penanda tiap sensor: judul, tombol, cincin pengukuran, dan titik
 /// penanda halaman.
@@ -16,6 +16,9 @@ abstract final class SensorColors {
 
   /// Mode berkala, yang menggabungkan beberapa sensor.
   static const interval = Color(0xFFB39DDB);
+
+  /// Pengiriman ke HP (edge).
+  static const phone = Color(0xFF80CBC4);
 }
 
 /// Merah muda lembut untuk pesan galat; tetap terbaca di latar hitam.
@@ -120,6 +123,7 @@ class MeasurementLayout extends StatelessWidget {
     this.footnote,
     this.onHistory,
     this.countdown,
+    this.startLabel = 'Mulai',
   });
 
   final String title;
@@ -137,6 +141,9 @@ class MeasurementLayout extends StatelessWidget {
   /// Bila diisi, cincin tepi menghitung mundur selama durasi ini. Tanpa itu,
   /// cincin menyala penuh selama pengukuran berjalan.
   final Duration? countdown;
+
+  /// Label tombol saat belum mengukur.
+  final String startLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -186,6 +193,7 @@ class MeasurementLayout extends StatelessWidget {
                   accent: accent,
                   onPressed: measuring ? onStop : onStart,
                   onHistory: onHistory,
+                  startLabel: startLabel,
                 ),
               ],
             ),
@@ -397,12 +405,14 @@ class MeasurementActions extends StatelessWidget {
     required this.accent,
     required this.onPressed,
     this.onHistory,
+    this.startLabel = 'Mulai',
   });
 
   final bool measuring;
   final Color accent;
   final VoidCallback onPressed;
   final VoidCallback? onHistory;
+  final String startLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -431,7 +441,7 @@ class MeasurementActions extends StatelessWidget {
                 textStyle: Theme.of(context).textTheme.labelLarge
                     ?.copyWith(fontWeight: FontWeight.w600),
               ),
-              child: Text(measuring ? 'Berhenti' : 'Mulai'),
+              child: Text(measuring ? 'Berhenti' : startLabel),
             ),
             if (history != null) ...[
               const SizedBox(width: 6),

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:hr_sdk_004/measurement_shared.dart';
-import 'package:hr_sdk_004/widgets/accelerometer_view.dart';
-import 'package:hr_sdk_004/widgets/heart_rate_view.dart';
-import 'package:hr_sdk_004/widgets/interval_view.dart';
-import 'package:hr_sdk_004/widgets/ppg_view.dart';
-import 'package:hr_sdk_004/widgets/spo2_view.dart';
+import 'package:hr_sdk_005_watch/measurement_shared.dart';
+import 'package:hr_sdk_005_watch/phone_sync.dart';
+import 'package:hr_sdk_005_watch/widgets/accelerometer_view.dart';
+import 'package:hr_sdk_005_watch/widgets/heart_rate_view.dart';
+import 'package:hr_sdk_005_watch/widgets/interval_view.dart';
+import 'package:hr_sdk_005_watch/widgets/ppg_view.dart';
+import 'package:hr_sdk_005_watch/widgets/spo2_view.dart';
+import 'package:hr_sdk_005_watch/widgets/sync_view.dart';
 
 class SensorPages extends StatefulWidget {
   const SensorPages({super.key});
@@ -21,6 +23,7 @@ class _SensorPagesState extends State<SensorPages> {
     AccelerometerView(),
     PpgView(),
     IntervalView(),
+    SyncView(),
   ];
 
   /// Warna titik aktif mengikuti sensor halaman yang sedang tampil.
@@ -30,6 +33,7 @@ class _SensorPagesState extends State<SensorPages> {
     SensorColors.accelerometer,
     SensorColors.ppg,
     SensorColors.interval,
+    SensorColors.phone,
   ];
 
   /// Porsi lebar layar yang harus ditarik ke kanan di halaman pertama sebelum
@@ -41,7 +45,15 @@ class _SensorPagesState extends State<SensorPages> {
   double _exitPull = 0;
 
   @override
+  void initState() {
+    super.initState();
+    // Selama aplikasi terbuka, data yang belum diterima HP dikirim berkala.
+    PhoneSync.instance.start();
+  }
+
+  @override
   void dispose() {
+    PhoneSync.instance.stop();
     _controller.dispose();
     super.dispose();
   }

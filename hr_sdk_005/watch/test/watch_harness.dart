@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hr_sdk_004/measurement_store.dart';
-import 'package:hr_sdk_004/widgets/accelerometer_view.dart';
-import 'package:hr_sdk_004/widgets/history_page.dart';
-import 'package:hr_sdk_004/widgets/ppg_view.dart';
+import 'package:hr_sdk_005_watch/measurement_store.dart';
+import 'package:hr_sdk_005_watch/widgets/accelerometer_view.dart';
+import 'package:hr_sdk_005_watch/widgets/history_page.dart';
+import 'package:hr_sdk_005_watch/widgets/ppg_view.dart';
 
 /// Galaxy Watch4 SM-R860: 396×396 piksel fisik. Rasio 2,0 disimpulkan dari
 /// screenshot perangkat (tombol setinggi 40 dp tampil 80 piksel), jadi layar
@@ -65,7 +65,9 @@ enum SensorPage {
   accelerometer(2, 'samsung_health/accelerometer'),
   ppg(3, 'samsung_health/ppg'),
   // Mode berkala: kejadian skenario dikirim lewat kanal detak jantung.
-  interval(4, 'samsung_health/heart_rate');
+  interval(4, 'samsung_health/heart_rate'),
+  // Halaman kirim ke HP tidak mendengarkan sensor; kanal hanya pelengkap.
+  phone(5, 'samsung_health/heart_rate');
 
   const SensorPage(this.pageIndex, this.channel);
 
@@ -167,6 +169,7 @@ final pageScenarios = [
     const SensorError(longestSensorError),
   ]),
   const Scenario('berkala · diam', SensorPage.interval),
+  const Scenario('kirim ke HP · diam', SensorPage.phone),
   Scenario('berkala · detak jantung', SensorPage.interval, [_heartRate()]),
   Scenario('berkala · galat', SensorPage.interval, [
     _heartRate(),
